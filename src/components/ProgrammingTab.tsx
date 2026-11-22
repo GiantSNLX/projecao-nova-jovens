@@ -35,6 +35,7 @@ import {
   validateMediaForHolyrics,
 } from '../utils/holyrics';
 import { findMatchingSong, parseScheduleText, readScheduleFromImage } from '../utils/scheduleOcr';
+import { AnimatedCounter } from './reactbits/AnimatedCounter';
 import { StageSimulator } from './StageSimulator';
 
 interface ProgrammingTabProps {
@@ -301,11 +302,9 @@ export function ProgrammingTab({
     <div className="space-y-8">
       <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Programação e Mídias
-          </h1>
+          <h1 className="page-title">Programação e Mídias</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Confira os formatos aceitos, importe e teste as mídias nos telões e acompanhe o checklist de horários.
+            Confira os formatos aceitos, importe e teste as mídias nos telões e acompanhe o checklist dos horários.
           </p>
         </div>
 
@@ -316,10 +315,10 @@ export function ProgrammingTab({
               type="button"
               disabled={!canEditProgramming || state.isFrozen}
               onClick={() => onChangeTeam(t)}
-              className={`min-h-[44px] rounded-lg border px-3 text-sm font-semibold transition-colors disabled:opacity-60 ${
+              className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
                 state.programmingTeam === t
-                  ? 'border-[#0095FF] bg-[#0095FF] text-white'
-                  : 'border-white/12 text-zinc-300 hover:bg-white/5'
+                  ? 'btn-rb-primary border-[#0095FF] text-white'
+                  : 'btn-rb-surface border-white/12 text-zinc-300'
               }`}
             >
               {TEAM_LABELS[t].name}
@@ -670,7 +669,7 @@ export function ProgrammingTab({
                 type="button"
                 disabled={!canEditProgramming || state.isFrozen}
                 onClick={handleApplyParsedSchedule}
-                className="mt-3 min-h-[44px] rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-45"
+                className="btn-rb-primary mt-3 min-h-[44px] rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-45"
               >
                 Gravar horários e validar checklist
               </button>
@@ -685,9 +684,10 @@ export function ProgrammingTab({
         <div className="space-y-3 border-t border-white/10 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-white">
-              Checklist dos horários ({completedChecklistCount}/{requiredChecklistCount} itens prontos)
+              Checklist dos horários (<AnimatedCounter value={completedChecklistCount} />/
+              <span className="font-mono-tech">{requiredChecklistCount}</span> itens prontos)
             </h3>
-            <span className="font-mono-tech text-xs text-zinc-400">
+            <span className="text-xs text-zinc-400">
               {completedChecklistCount === requiredChecklistCount
                 ? 'Tudo verde para o culto'
                 : 'Vai ficando verde conforme músicas e mídias chegam'}

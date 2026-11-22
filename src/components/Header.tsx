@@ -1,4 +1,14 @@
-import { LogOut, ShieldCheck } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  Home,
+  LogOut,
+  MonitorPlay,
+  Music,
+  Radio,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react';
 import type { MemberUser, TabId } from '../types/portal';
 import { ProjectorMark } from './ProjectorMark';
 
@@ -10,14 +20,14 @@ interface HeaderProps {
   onLogout: () => void;
 }
 
-const NAV_ITEMS: { id: TabId; label: string }[] = [
-  { id: 'inicio', label: 'Início' },
-  { id: 'musicas', label: 'Músicas' },
-  { id: 'programacao', label: 'Programação e Mídias' },
-  { id: 'culto', label: 'Culto' },
-  { id: 'meditacao', label: 'Controle de Meditação' },
-  { id: 'escalas', label: 'Escalas' },
-  { id: 'configuracoes', label: 'Configurações' },
+const NAV_ITEMS: { id: TabId; label: string; icon: typeof Home }[] = [
+  { id: 'inicio', label: 'Início', icon: Home },
+  { id: 'programacao', label: 'Programação e Mídias', icon: MonitorPlay },
+  { id: 'musicas', label: 'Músicas', icon: Music },
+  { id: 'culto', label: 'Culto', icon: Radio },
+  { id: 'escalas', label: 'Escalas', icon: CalendarDays },
+  { id: 'meditacao', label: 'MDO', icon: BookOpen },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 export function Header({
@@ -60,7 +70,7 @@ export function Header({
             <button
               type="button"
               onClick={onLogout}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+              className="btn-rb-surface inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium text-zinc-300 hover:text-white"
             >
               <LogOut className="h-4 w-4" />
               <span>Sair</span>
@@ -68,9 +78,10 @@ export function Header({
           </div>
         </div>
 
-        {/* Desktop navigation */}
+        {/* Navegação principal seguindo o fluxo semanal */}
         <nav aria-label="Navegação principal" className="hidden gap-1 overflow-x-auto md:flex">
           {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
             const active = activeTab === item.id;
             return (
               <button
@@ -78,13 +89,18 @@ export function Header({
                 type="button"
                 onClick={() => onTabChange(item.id)}
                 aria-current={active ? 'page' : undefined}
-                className={`relative min-h-[44px] shrink-0 px-3 text-sm font-medium transition-colors ${
+                className={`group relative inline-flex min-h-[44px] shrink-0 items-center gap-2 px-3 text-sm font-medium transition-colors ${
                   active ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {item.label}
+                <Icon
+                  className={`h-4 w-4 transition-transform duration-150 group-hover:scale-110 ${
+                    active ? 'text-[#0095FF]' : 'text-zinc-500 group-hover:text-zinc-300'
+                  }`}
+                />
+                <span>{item.label}</span>
                 {active && (
-                  <span className="absolute inset-x-3 bottom-0 h-0.5 bg-[#0095FF]" />
+                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#0095FF]" />
                 )}
               </button>
             );

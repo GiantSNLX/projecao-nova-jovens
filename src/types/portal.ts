@@ -168,25 +168,17 @@ export interface MediaAsset {
   isDemoPlaceholder?: boolean;
 }
 
-export interface MdoEntry {
-  id: string;
-  userId: string;
-  dayKey: 'SEG' | 'TER' | 'QUA' | 'QUI' | 'SEX' | 'SAB';
-  dayLabel: string;
-  completed: boolean;
-  bibleReference: string;
-  reflectionNote: string;
-  updatedAt?: string;
-}
-
-export interface SaturdayVerseRecord {
+export interface SaturdayMdoRecord {
   id: string;
   userId: string;
   saturdayDate: string;
-  spoken: boolean;
-  spokenToUserId: string;
-  verseReference: string;
-  spokenAt?: string;
+  /** M — Dias meditados na semana (0 a 5, sendo 0 não feita e 5 feita) */
+  meditationDays: number;
+  /** D — Versículos decorados (mínimo 5, máximo 70) */
+  memorizedVerses: number;
+  /** O — Dias de oração (0 a 5, sendo 0 não feita e 5 feita) */
+  prayerDays: number;
+  updatedAt?: string;
 }
 
 export interface AuditLogEntry {
@@ -218,7 +210,6 @@ export interface ServiceState {
   runItems: RunItem[];
   songs: ServiceSong[];
   mediaAssets: MediaAsset[];
-  mdoEntries: MdoEntry[];
-  saturdayVerses: SaturdayVerseRecord[];
+  saturdayMdoRecords: SaturdayMdoRecord[];
   auditLogs: AuditLogEntry[];
 }

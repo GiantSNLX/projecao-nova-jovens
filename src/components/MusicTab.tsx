@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Copy,
@@ -57,6 +57,14 @@ export function MusicTab({
   const [extractingDoc, setExtractingDoc] = useState(false);
   const [docFeedback, setDocFeedback] = useState<string | null>(null);
   const [copiedVersion, setCopiedVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (creatingNew || !selectedSong) return;
+    setTitle(selectedSong.title);
+    setRawLyrics(selectedSong.rawLyrics);
+    setNotes(selectedSong.notes ?? '');
+    setSlideNotes(selectedSong.slideNotes ?? {});
+  }, [creatingNew, selectedSong]);
 
   const selectSong = (song: ServiceSong) => {
     setCreatingNew(false);
@@ -261,16 +269,16 @@ export function MusicTab({
     <div className="space-y-8">
       <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Músicas</h1>
+          <h1 className="page-title">Músicas</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Anexe o PDF/PPTX/TXT ou cole a letra antes mesmo do roteiro. Visualize como aparecerá no Culto e deixe notas em slides específicos.
+            Suba o PDF, PPTX ou TXT (ou cole a letra). Veja como aparecerá nos telões do Culto e deixe avisos em slides específicos.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {canEditMusic && !isFrozen && (
             <>
-              <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]">
+              <label className="btn-rb-primary inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white">
                 {extractingDoc ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -293,7 +301,7 @@ export function MusicTab({
               <button
                 type="button"
                 onClick={startNewSong}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3.5 text-sm font-medium text-white hover:bg-white/5"
+                className="btn-rb-surface inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3.5 text-sm font-medium text-white"
               >
                 <Plus className="h-4 w-4" />
                 <span>Nova música</span>
@@ -448,7 +456,7 @@ export function MusicTab({
             {canEditMusic && !isFrozen && (
               <button
                 type="submit"
-                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]"
+                className="btn-rb-primary inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 <span>Salvar e enviar para o Culto</span>

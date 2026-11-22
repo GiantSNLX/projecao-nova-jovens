@@ -263,7 +263,7 @@ export function CultoTab({
       {/* Header with Culto / Sábado selector */}
       <section className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Culto</h1>
+          <h1 className="page-title">Culto</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Confira as mídias e letras recebidas, teste nos três telões, solicite ajustes ou baixe tudo para o Holyrics.
           </p>
@@ -510,19 +510,20 @@ export function CultoTab({
           </div>
 
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
-            <h2 className="text-base font-semibold text-white">Baixar pacote do Holyrics</h2>
+            <h2 className="section-title">Baixar pacote do Culto (.zip)</h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Pasta compactada (.zip) com <span className="font-mono-tech">01 - 1 linha</span> (Retorno/Studio), <span className="font-mono-tech">02 - 2 linhas</span> (Principal), roteiro e mídias.
+              Inclui <span className="font-mono-tech">01 - 1 linha</span> (Retorno/Studio),{' '}
+              <span className="font-mono-tech">02 - 2 linhas</span> (Principal), roteiro e mídias.
             </p>
 
             <button
               type="button"
               disabled={isExporting}
               onClick={() => void handleDownloadHolyricsZip()}
-              className="mt-4 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-50"
+              className="btn-rb-primary mt-4 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              <span>{isExporting ? 'Gerando .ZIP...' : 'Baixar Pacote .ZIP Holyrics'}</span>
+              <span>{isExporting ? 'Gerando .ZIP...' : 'Baixar Pacote para Holyrics'}</span>
             </button>
 
             {exportedFilename && (
@@ -533,7 +534,7 @@ export function CultoTab({
           </div>
 
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
-            <h2 className="text-base font-semibold text-white">Aviso na mesa</h2>
+            <h2 className="section-title">Aviso na mesa</h2>
             <textarea
               rows={3}
               value={notesDraft}
@@ -545,7 +546,7 @@ export function CultoTab({
               <button
                 type="button"
                 onClick={() => onUpdateLiveNotes(notesDraft)}
-                className="mt-2.5 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-medium text-white hover:bg-white/5"
+                className="btn-rb-surface mt-2.5 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-medium text-white"
               >
                 Salvar aviso
               </button>

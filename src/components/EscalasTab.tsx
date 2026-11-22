@@ -207,7 +207,7 @@ export function EscalasTab({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Escalas</h1>
+          <h1 className="page-title">Escalas</h1>
           <p className="mt-1 text-sm text-zinc-400">
             {activeSubTab === 'ver'
               ? 'Veja os eventos de cada sábado (auditório ou salas) e confirme somente a sua escala.'

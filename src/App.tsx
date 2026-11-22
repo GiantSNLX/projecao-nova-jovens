@@ -8,14 +8,13 @@ import type {
   AuditLogEntry,
   DeskAssignment,
   DeskPosition,
-  MdoEntry,
   MediaAsset,
   MemberUser,
   ProgrammingTeam,
   Role,
   RunItem,
+  SaturdayMdoRecord,
   SaturdaySchedule,
-  SaturdayVerseRecord,
   ScheduleLocationType,
   ScreenCode,
   ServiceSong,
@@ -23,6 +22,7 @@ import type {
   TabId,
 } from './types/portal';
 import { findMatchingSong } from './utils/scheduleOcr';
+import { ClickSpark } from './components/reactbits/ClickSpark';
 import { LoginScreen } from './components/LoginScreen';
 import { Header } from './components/Header';
 import { MobileNav } from './components/MobileNav';
@@ -34,7 +34,7 @@ import { DevotionalTab } from './components/DevotionalTab';
 import { EscalasTab, type NewSchedulePayload } from './components/EscalasTab';
 import { ConfiguracoesTab, type NewUserPayload } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v8';
+const STORAGE_KEY = 'projecao-nova-jovens-v9';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
@@ -49,6 +49,8 @@ function loadInitialState(): ServiceState {
       ...INITIAL_SERVICE_STATE,
       ...parsed,
       members: parsed.members && parsed.members.length > 0 ? parsed.members : INITIAL_MEMBERS,
+      saturdayMdoRecords:
+        parsed.saturdayMdoRecords ?? INITIAL_SERVICE_STATE.saturdayMdoRecords,
       activeScheduleId: parsed.activeScheduleId || INITIAL_SERVICE_STATE.activeScheduleId,
     };
   } catch {
@@ -723,29 +725,24 @@ export function App() {
     }));
   };
 
-  const handleSaveMdo = (entry: MdoEntry) => {
+  const handleSaveSaturdayMdo = (record: SaturdayMdoRecord) => {
+    const targetMember = state.members.find((m) => m.id === record.userId);
     setState((prev) => {
-      const exists = prev.mdoEntries.some((m) => m.id === entry.id);
+      const exists = prev.saturdayMdoRecords.some(
+        (r) => r.userId === record.userId && r.saturdayDate === record.saturdayDate,
+      );
       return {
         ...prev,
-        mdoEntries: exists
-          ? prev.mdoEntries.map((m) => (m.id === entry.id ? entry : m))
-          : [...prev.mdoEntries, entry],
-      };
-    });
-  };
-
-  const handleSaveSaturdayVerse = (record: SaturdayVerseRecord) => {
-    const listener = INITIAL_MEMBERS.find((m) => m.id === record.spokenToUserId);
-    setState((prev) => {
-      const exists = prev.saturdayVerses.some((v) => v.id === record.id);
-      return {
-        ...prev,
-        saturdayVerses: exists
-          ? prev.saturdayVerses.map((v) => (v.id === record.id ? record : v))
-          : [...prev.saturdayVerses, record],
+        saturdayMdoRecords: exists
+          ? prev.saturdayMdoRecords.map((r) =>
+              r.userId === record.userId && r.saturdayDate === record.saturdayDate ? record : r,
+            )
+          : [...prev.saturdayMdoRecords, record],
         auditLogs: [
-          makeAudit('Versículos', `falou versículos para ${listener?.name ?? 'líder'}.`),
+          makeAudit(
+            'MDO',
+            `registrou MDO de ${targetMember?.name ?? 'membro'} (M ${record.meditationDays}/5 · D ${record.memorizedVerses} · O ${record.prayerDays}/5).`,
+          ),
           ...prev.auditLogs,
         ],
       };
@@ -790,115 +787,115 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0C0F] text-[#F4F5F7]">
-      <Header
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        activeUser={activeUser}
-        isLeader={isLeader}
-        onLogout={handleLogout}
-      />
+    <ClickSpark sparkColor="#38BDF8" sparkRadius={18} sparkSize={8}>
+      <div className="min-h-screen bg-[#0B0C0F] text-[#F4F5F7]">
+        <Header
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          activeUser={activeUser}
+          isLeader={isLeader}
+          onLogout={handleLogout}
+        />
 
-      <main className="mx-auto max-w-[1200px] px-4 py-6 pb-24 sm:px-6 md:py-8 md:pb-12 lg:px-8">
-        {activeTab === 'inicio' && (
-          <InicioTab
-            state={state}
-            activeUser={activeUser}
-            onUpdateAttendance={(id, status) =>
-              handleUpdateAttendance(state.activeScheduleId, id, status)
-            }
-            onToggleServingOnDesk={(id) => handleToggleServingOnDesk(state.activeScheduleId, id)}
-            onNavigateTab={setActiveTab}
-          />
-        )}
+        <main className="mx-auto max-w-[1200px] px-4 py-6 pb-24 sm:px-6 md:py-8 md:pb-12 lg:px-8">
+          {activeTab === 'inicio' && (
+            <InicioTab
+              state={state}
+              activeUser={activeUser}
+              onUpdateAttendance={(id, status) =>
+                handleUpdateAttendance(state.activeScheduleId, id, status)
+              }
+              onToggleServingOnDesk={(id) => handleToggleServingOnDesk(state.activeScheduleId, id)}
+              onNavigateTab={setActiveTab}
+            />
+          )}
 
-        {activeTab === 'musicas' && (
-          <MusicTab
-            songs={state.songs}
-            canEditMusic={canEditMusic}
-            isLeader={isLeader}
-            activeUserName={activeUser.name}
-            isFrozen={state.isFrozen}
-            onSaveOrAddSong={handleSaveOrAddSong}
-            onToggleApproveSong={handleToggleApproveSong}
-            onRemoveSong={handleRemoveSong}
-          />
-        )}
+          {activeTab === 'musicas' && (
+            <MusicTab
+              songs={state.songs}
+              canEditMusic={canEditMusic}
+              isLeader={isLeader}
+              activeUserName={activeUser.name}
+              isFrozen={state.isFrozen}
+              onSaveOrAddSong={handleSaveOrAddSong}
+              onToggleApproveSong={handleToggleApproveSong}
+              onRemoveSong={handleRemoveSong}
+            />
+          )}
 
-        {activeTab === 'programacao' && (
-          <ProgrammingTab
-            state={state}
-            canEditProgramming={canEditProgramming}
-            isLeader={isLeader}
-            activeUserName={activeUser.name}
-            onChangeTeam={handleChangeProgrammingTeam}
-            onReplaceScheduleFromImport={handleReplaceScheduleFromImport}
-            onAddMediaAsset={handleAddMediaAsset}
-            onToggleApproveMedia={handleToggleApproveMedia}
-            onRemoveMediaAsset={handleRemoveMediaAsset}
-          />
-        )}
+          {activeTab === 'programacao' && (
+            <ProgrammingTab
+              state={state}
+              canEditProgramming={canEditProgramming}
+              isLeader={isLeader}
+              activeUserName={activeUser.name}
+              onChangeTeam={handleChangeProgrammingTeam}
+              onReplaceScheduleFromImport={handleReplaceScheduleFromImport}
+              onAddMediaAsset={handleAddMediaAsset}
+              onToggleApproveMedia={handleToggleApproveMedia}
+              onRemoveMediaAsset={handleRemoveMediaAsset}
+            />
+          )}
 
-        {activeTab === 'culto' && (
-          <CultoTab
-            state={state}
-            members={state.members}
-            canOperateDesk={canOperateDesk}
-            uploadedFilesMap={uploadedFilesRef.current}
-            onSelectSchedule={handleSelectSchedule}
-            onUpdateLiveNotes={handleUpdateLiveNotes}
-            onRequestMediaAdjustment={handleRequestMediaAdjustment}
-            onRequestSongAdjustment={handleRequestSongAdjustment}
-            onPackageGenerated={(zipName) => handlePackageGenerated(zipName)}
-          />
-        )}
+          {activeTab === 'culto' && (
+            <CultoTab
+              state={state}
+              members={state.members}
+              canOperateDesk={canOperateDesk}
+              uploadedFilesMap={uploadedFilesRef.current}
+              onSelectSchedule={handleSelectSchedule}
+              onUpdateLiveNotes={handleUpdateLiveNotes}
+              onRequestMediaAdjustment={handleRequestMediaAdjustment}
+              onRequestSongAdjustment={handleRequestSongAdjustment}
+              onPackageGenerated={(zipName) => handlePackageGenerated(zipName)}
+            />
+          )}
 
-        {activeTab === 'meditacao' && (
-          <DevotionalTab
-            activeUser={activeUser}
-            isLeader={isLeader}
-            members={state.members}
-            saturdayDate={state.serviceDate}
-            mdoEntries={state.mdoEntries}
-            saturdayVerses={state.saturdayVerses}
-            onSaveMdo={handleSaveMdo}
-            onSaveSaturdayVerse={handleSaveSaturdayVerse}
-          />
-        )}
+          {activeTab === 'meditacao' && (
+            <DevotionalTab
+              activeUser={activeUser}
+              isLeader={isLeader}
+              members={state.members}
+              saturdayDate={state.serviceDate}
+              records={state.saturdayMdoRecords}
+              onSaveSaturdayMdo={handleSaveSaturdayMdo}
+            />
+          )}
 
-        {activeTab === 'escalas' && (
-          <EscalasTab
-            state={state}
-            members={state.members}
-            activeUser={activeUser}
-            isLeader={isLeader}
-            onUpdateAttendance={handleUpdateAttendance}
-            onToggleServingOnDesk={handleToggleServingOnDesk}
-            onChangeAssignmentMember={handleChangeAssignmentMember}
-            onUpdateScheduleDetails={handleUpdateScheduleDetails}
-            onTogglePositionInSchedule={handleTogglePositionInSchedule}
-            onAddSchedule={handleAddSchedule}
-            onToggleArchiveSchedule={handleToggleArchiveSchedule}
-          />
-        )}
+          {activeTab === 'escalas' && (
+            <EscalasTab
+              state={state}
+              members={state.members}
+              activeUser={activeUser}
+              isLeader={isLeader}
+              onUpdateAttendance={handleUpdateAttendance}
+              onToggleServingOnDesk={handleToggleServingOnDesk}
+              onChangeAssignmentMember={handleChangeAssignmentMember}
+              onUpdateScheduleDetails={handleUpdateScheduleDetails}
+              onTogglePositionInSchedule={handleTogglePositionInSchedule}
+              onAddSchedule={handleAddSchedule}
+              onToggleArchiveSchedule={handleToggleArchiveSchedule}
+            />
+          )}
 
-        {activeTab === 'configuracoes' && (
-          <ConfiguracoesTab
-            state={state}
-            currentUserId={activeUser.id}
-            isLeader={isLeader}
-            onUpdateScreen={handleUpdateScreen}
-            onToggleFreeze={handleToggleFreeze}
-            onAddMember={handleAddMember}
-            onUpdateMember={handleUpdateMember}
-            onRemoveMember={handleRemoveMember}
-            onResetDemo={handleResetDemo}
-          />
-        )}
-      </main>
+          {activeTab === 'configuracoes' && (
+            <ConfiguracoesTab
+              state={state}
+              currentUserId={activeUser.id}
+              isLeader={isLeader}
+              onUpdateScreen={handleUpdateScreen}
+              onToggleFreeze={handleToggleFreeze}
+              onAddMember={handleAddMember}
+              onUpdateMember={handleUpdateMember}
+              onRemoveMember={handleRemoveMember}
+              onResetDemo={handleResetDemo}
+            />
+          )}
+        </main>
 
-      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
-    </div>
+        <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+    </ClickSpark>
   );
 }
 

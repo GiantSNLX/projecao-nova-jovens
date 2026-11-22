@@ -107,10 +107,10 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
 
           <button
             type="submit"
-            className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-base font-semibold text-white transition-colors hover:bg-[#0082E0]"
+            className="btn-rb-primary group mt-5 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg px-4 text-base font-semibold text-white"
           >
             <span>Entrar</span>
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
         </form>
 

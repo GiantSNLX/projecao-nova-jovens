@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, UserCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, MonitorPlay, Music, Radio, UserCheck } from 'lucide-react';
 import type {
   AttendanceStatus,
   MemberUser,
@@ -6,6 +6,8 @@ import type {
   TabId,
 } from '../types/portal';
 import { DESK_POSITION_INFO, TEAM_LABELS } from '../data/initialState';
+import { GlassIconBadge } from './reactbits/GlassIconBadge';
+import { SpotlightCard } from './reactbits/SpotlightCard';
 
 interface InicioTabProps {
   state: ServiceState;
@@ -13,6 +15,12 @@ interface InicioTabProps {
   onUpdateAttendance: (assignmentId: string, status: AttendanceStatus) => void;
   onToggleServingOnDesk: (assignmentId: string) => void;
   onNavigateTab: (tab: TabId) => void;
+}
+
+function formatDateBr(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-');
+  if (!y || !m || !d) return isoDate;
+  return `${d}/${m}/${y}`;
 }
 
 export function InicioTab({
@@ -29,67 +37,72 @@ export function InicioTab({
   const isProgrammingRole = activeUser.roles.includes('PROGRAMMING');
 
   const songsWithLyrics = state.songs.filter((s) => s.rawLyrics.trim().length > 0).length;
-  const mdoDone = state.mdoEntries.filter((m) => m.userId === activeUser.id && m.completed).length;
+  const myMdo = state.saturdayMdoRecords.find(
+    (r) => r.userId === activeUser.id && r.saturdayDate === state.serviceDate,
+  );
 
   return (
     <div className="space-y-8">
       {/* Telão de boas-vindas */}
-      <section
-        aria-label="Telão Projeção"
-        className="relative flex aspect-video max-h-[250px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-[#0095FF]/35 bg-[#07080B] px-6 text-center"
+      <SpotlightCard
+        spotlightColor="rgba(0, 149, 255, 0.16)"
+        className="rounded-xl border border-[#0095FF]/35 bg-[#07080B]"
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,149,255,0.16),transparent_68%)]"
-        />
-        <div className="relative z-10 space-y-2">
-          <span className="font-mono-tech inline-block rounded border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium tracking-widest text-[#38BDF8]">
-            TELÃO PRINCIPAL · 16:9
-          </span>
-          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-4xl">
-            Projeção
-          </h2>
-          <p className="text-sm font-medium text-zinc-200 sm:text-lg">
-            Projetando a Cristo através de mídias
-          </p>
-        </div>
-      </section>
+        <section
+          aria-label="Telão Projeção"
+          className="relative flex aspect-video max-h-[240px] w-full flex-col items-center justify-center px-6 text-center"
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,149,255,0.16),transparent_68%)]"
+          />
+          <div className="relative z-10 space-y-2">
+            <span className="font-mono-tech inline-block rounded border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium tracking-widest text-[#38BDF8]">
+              TELÃO PRINCIPAL · 16:9
+            </span>
+            <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
+              Projeção
+            </h2>
+            <p className="text-sm font-medium text-zinc-200 sm:text-lg">
+              Projetando a Cristo através de mídias
+            </p>
+          </div>
+        </section>
+      </SpotlightCard>
 
       <section className="border-b border-white/10 pb-7">
         <p className="font-mono-tech text-xs text-zinc-400">
-          {state.title} · {state.serviceDate} · {state.startsAtTime}
+          {state.title} · {formatDateBr(state.serviceDate)} · {state.startsAtTime}
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-          Olá, {activeUser.name.split(' ')[0]}.
-        </h1>
+        <h1 className="page-title mt-2">Olá, {activeUser.name.split(' ')[0]}.</h1>
         <p className="mt-2 max-w-2xl text-base text-zinc-400">
           {myAssignment
             ? `Você está escalado na mesa como ${DESK_POSITION_INFO[myAssignment.position].label}.`
             : isProgrammingRole
-              ? 'Envie a imagem do roteiro e as mídias do culto para cair direto na mesa da Projeção.'
+              ? 'Envie as mídias nos telões e o roteiro da semana para cair direto no painel do Culto.'
               : isMusicRole
-                ? 'Preencha as letras das músicas vindas do roteiro para gerar os arquivos do Holyrics.'
-                : 'Acompanhe o fluxo do culto da semana e suas meditações.'}
+                ? 'Envie as letras das músicas em 1 linha (Retorno/Studio) e 2 linhas (Principal).'
+                : 'Acompanhe o andamento do culto da semana e registre seu MDO de sábado.'}
         </p>
 
-        {/* Primary action by user's context — zero clutter */}
+        {/* Ação principal conforme papel do usuário */}
         <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
           {myAssignment ? (
             <>
               <button
                 type="button"
                 onClick={() => onToggleServingOnDesk(myAssignment.id)}
-                className={`inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition-colors ${
+                className={`group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold ${
                   myAssignment.servingOnDesk
-                    ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                    : 'bg-[#0095FF] text-white hover:bg-[#0082E0]'
+                    ? 'btn-rb-surface border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                    : 'btn-rb-primary text-white'
                 }`}
               >
-                <UserCheck className="h-4 w-4" />
+                <UserCheck className="h-4 w-4 transition-transform group-hover:scale-110" />
                 <span>
                   {myAssignment.servingOnDesk
-                    ? `Servindo na mesa (${DESK_POSITION_INFO[myAssignment.position].label})`
-                    : 'Já estou servindo na mesa'}
+                    ? `Estou na mesa (${DESK_POSITION_INFO[myAssignment.position].label})`
+                    : 'Estou na mesa'}
                 </span>
               </button>
 
@@ -101,13 +114,13 @@ export function InicioTab({
                     myAssignment.attendanceStatus === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
                   )
                 }
-                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/12 px-5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/5"
+                className="btn-rb-surface inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/12 px-5 text-sm font-medium text-zinc-200"
               >
-                <CheckCircle2 className="h-4 w-4" />
+                <CheckCircle2 className="h-4 w-4 text-[#0095FF]" />
                 <span>
                   {myAssignment.attendanceStatus === 'CONFIRMED'
-                    ? 'Presença confirmada'
-                    : 'Confirmar presença'}
+                    ? 'Escala confirmada'
+                    : 'Confirmar escala'}
                 </span>
               </button>
             </>
@@ -115,88 +128,107 @@ export function InicioTab({
             <button
               type="button"
               onClick={() => onNavigateTab('programacao')}
-              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
+              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
-              <span>Importar roteiro e enviar mídias</span>
-              <ArrowRight className="h-4 w-4" />
+              <span>Testar mídias e importar roteiro</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
           ) : isMusicRole ? (
             <button
               type="button"
               onClick={() => onNavigateTab('musicas')}
-              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
+              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
-              <span>Completar letras das músicas</span>
-              <ArrowRight className="h-4 w-4" />
+              <span>Enviar letras das músicas</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
           ) : (
             <button
               type="button"
               onClick={() => onNavigateTab('meditacao')}
-              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
+              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
-              <span>Abrir meu controle de meditação</span>
-              <ArrowRight className="h-4 w-4" />
+              <span>Registrar meu MDO</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
           )}
         </div>
       </section>
 
-      {/* Fluxo da semana: Programação + Música -> Projeção */}
+      {/* Fluxo semanal: Programação + Músicas -> Culto */}
       <section>
-        <h2 className="text-sm font-semibold text-zinc-300">
-          Fluxo da semana (dos ministérios para a Projeção)
-        </h2>
+        <h2 className="section-title">Fluxo da semana (dos ministérios para a Projeção)</h2>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => onNavigateTab('programacao')}
-            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
-          >
-            <span className="text-xs text-zinc-400">1. Programação {team.name}</span>
-            <div className="mt-1 text-base font-semibold text-white">
-              {state.runItems.length} momentos · {state.mediaAssets.length} mídias
-            </div>
-            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
-              <span>Importar roteiro e mídias</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-          </button>
+          <SpotlightCard className="group rounded-xl border border-white/10 bg-[#12141A] transition-colors hover:border-[#0095FF]/40">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('programacao')}
+              className="w-full p-4 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-400">
+                  1. Programação {team.name}
+                </span>
+                <GlassIconBadge icon={MonitorPlay} size="sm" tone="blue" />
+              </div>
+              <div className="mt-2 text-base font-semibold text-white">
+                {state.runItems.length} horários · {state.mediaAssets.length} mídias
+              </div>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#38BDF8]">
+                <span>Abrir Programação e Mídias</span>
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </button>
+          </SpotlightCard>
 
-          <button
-            type="button"
-            onClick={() => onNavigateTab('musicas')}
-            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
-          >
-            <span className="text-xs text-zinc-400">2. Ministério de Música</span>
-            <div className="mt-1 text-base font-semibold text-white">
-              {songsWithLyrics} de {state.songs.length} letras prontas
-            </div>
-            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
-              <span>Ver músicas do roteiro</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-          </button>
+          <SpotlightCard className="group rounded-xl border border-white/10 bg-[#12141A] transition-colors hover:border-emerald-500/40">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('musicas')}
+              className="w-full p-4 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-400">2. Ministério de Música</span>
+                <GlassIconBadge icon={Music} size="sm" tone="emerald" />
+              </div>
+              <div className="mt-2 text-base font-semibold text-white">
+                {songsWithLyrics} de {state.songs.length} letras prontas
+              </div>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                <span>Abrir Músicas</span>
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </button>
+          </SpotlightCard>
 
-          <button
-            type="button"
-            onClick={() => onNavigateTab('culto')}
-            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
-          >
-            <span className="text-xs text-zinc-400">3. Projeção (Culto)</span>
-            <div className="mt-1 text-base font-semibold text-white">
-              Tudo reunido para o Holyrics
-            </div>
-            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
-              <span>Abrir painel do culto</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-          </button>
+          <SpotlightCard className="group rounded-xl border border-white/10 bg-[#12141A] transition-colors hover:border-[#F5C41E]/40">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('culto')}
+              className="w-full p-4 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-400">3. Projeção (Culto)</span>
+                <GlassIconBadge icon={Radio} size="sm" tone="gold" />
+              </div>
+              <div className="mt-2 text-base font-semibold text-white">
+                Conferir tudo para o Holyrics
+              </div>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#F5C41E]">
+                <span>Abrir painel do Culto</span>
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </button>
+          </SpotlightCard>
         </div>
 
-        <p className="mt-4 text-xs text-zinc-500">
-          Seu MDO desta semana: {mdoDone}/6 dias preenchidos.
+        <p className="mt-4 text-xs text-zinc-400">
+          Seu MDO deste sábado ({formatDateBr(state.serviceDate)}):{' '}
+          <span className="font-mono-tech text-zinc-200">
+            M {myMdo?.meditationDays ?? 0}/5 · D {myMdo?.memorizedVerses ?? 0} vers. · O{' '}
+            {myMdo?.prayerDays ?? 0}/5
+          </span>
         </p>
       </section>
     </div>

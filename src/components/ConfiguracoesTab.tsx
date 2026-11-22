@@ -7,6 +7,8 @@ import type {
   ScreenCode,
   ServiceState,
 } from '../types/portal';
+import { AnimatedCounter } from './reactbits/AnimatedCounter';
+import { SpotlightCard } from './reactbits/SpotlightCard';
 
 type MinistryChoice = 'PROJECAO' | 'MUSICA' | 'PROGRAMACAO';
 
@@ -146,7 +148,7 @@ export function ConfiguracoesTab({
     <div className="space-y-8">
       <div className="flex flex-col gap-2 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Configurações</h1>
+          <h1 className="page-title">Configurações</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Usuários, permissões por ministério, resoluções dos telões e prazo de envio.
           </p>
@@ -168,7 +170,7 @@ export function ConfiguracoesTab({
       <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="flex items-center gap-2 text-base font-semibold text-white">
+            <h2 className="section-title flex items-center gap-2">
               <Users className="h-4 w-4 text-[#0095FF]" />
               <span>Usuários e Permissões</span>
             </h2>
@@ -176,66 +178,77 @@ export function ConfiguracoesTab({
               Visualize quantas pessoas estão em cada ministério e gerencie acessos.
             </p>
           </div>
-          <span className="font-mono-tech text-xs text-zinc-400">
-            Total ativos: {counts.total}
+          <span className="text-xs font-medium text-zinc-400">
+            Total ativos: <AnimatedCounter value={counts.total} className="text-white" />
           </span>
         </div>
 
         {/* Contagem por ministério */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => setFilterMinistry(filterMinistry === 'PROJECAO' ? 'ALL' : 'PROJECAO')}
-            className={`flex min-h-[56px] items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-              filterMinistry === 'PROJECAO'
-                ? 'border-[#0095FF] bg-[#0095FF]/10'
-                : 'border-white/10 bg-[#0B0C0F] hover:border-white/25'
-            }`}
-          >
-            <div>
-              <p className="text-xs text-zinc-400">Projeção</p>
-              <p className="text-sm font-medium text-white">Mesa & Liderança</p>
-            </div>
-            <span className="font-mono-tech text-2xl font-semibold text-[#0095FF]">
-              {counts.projecao}
-            </span>
-          </button>
+          <SpotlightCard className="rounded-lg border border-white/10 bg-[#0B0C0F]">
+            <button
+              type="button"
+              onClick={() => setFilterMinistry(filterMinistry === 'PROJECAO' ? 'ALL' : 'PROJECAO')}
+              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
+                filterMinistry === 'PROJECAO' ? 'bg-[#0095FF]/12' : ''
+              }`}
+            >
+              <div>
+                <p className="text-xs text-zinc-400">Projeção</p>
+                <p className="text-sm font-medium text-white">Mesa & Liderança</p>
+              </div>
+              <AnimatedCounter
+                value={counts.projecao}
+                className="text-2xl font-semibold text-[#0095FF]"
+              />
+            </button>
+          </SpotlightCard>
 
-          <button
-            type="button"
-            onClick={() => setFilterMinistry(filterMinistry === 'MUSICA' ? 'ALL' : 'MUSICA')}
-            className={`flex min-h-[56px] items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-              filterMinistry === 'MUSICA'
-                ? 'border-[#0095FF] bg-[#0095FF]/10'
-                : 'border-white/10 bg-[#0B0C0F] hover:border-white/25'
-            }`}
+          <SpotlightCard
+            spotlightColor="rgba(16, 185, 129, 0.14)"
+            className="rounded-lg border border-white/10 bg-[#0B0C0F]"
           >
-            <div>
-              <p className="text-xs text-zinc-400">Música</p>
-              <p className="text-sm font-medium text-white">Letras & Louvor</p>
-            </div>
-            <span className="font-mono-tech text-2xl font-semibold text-emerald-400">
-              {counts.musica}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilterMinistry(filterMinistry === 'MUSICA' ? 'ALL' : 'MUSICA')}
+              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
+                filterMinistry === 'MUSICA' ? 'bg-emerald-500/10' : ''
+              }`}
+            >
+              <div>
+                <p className="text-xs text-zinc-400">Música</p>
+                <p className="text-sm font-medium text-white">Letras & Louvor</p>
+              </div>
+              <AnimatedCounter
+                value={counts.musica}
+                className="text-2xl font-semibold text-emerald-400"
+              />
+            </button>
+          </SpotlightCard>
 
-          <button
-            type="button"
-            onClick={() => setFilterMinistry(filterMinistry === 'PROGRAMACAO' ? 'ALL' : 'PROGRAMACAO')}
-            className={`flex min-h-[56px] items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-              filterMinistry === 'PROGRAMACAO'
-                ? 'border-[#0095FF] bg-[#0095FF]/10'
-                : 'border-white/10 bg-[#0B0C0F] hover:border-white/25'
-            }`}
+          <SpotlightCard
+            spotlightColor="rgba(245, 196, 30, 0.14)"
+            className="rounded-lg border border-white/10 bg-[#0B0C0F]"
           >
-            <div>
-              <p className="text-xs text-zinc-400">Programação</p>
-              <p className="text-sm font-medium text-white">Alpha, Bravo, Charlie</p>
-            </div>
-            <span className="font-mono-tech text-2xl font-semibold text-[#F5C41E]">
-              {counts.programacao}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() =>
+                setFilterMinistry(filterMinistry === 'PROGRAMACAO' ? 'ALL' : 'PROGRAMACAO')
+              }
+              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
+                filterMinistry === 'PROGRAMACAO' ? 'bg-[#F5C41E]/10' : ''
+              }`}
+            >
+              <div>
+                <p className="text-xs text-zinc-400">Programação</p>
+                <p className="text-sm font-medium text-white">Alpha, Bravo, Charlie</p>
+              </div>
+              <AnimatedCounter
+                value={counts.programacao}
+                className="text-2xl font-semibold text-[#F5C41E]"
+              />
+            </button>
+          </SpotlightCard>
         </div>
 
         {/* Cadastro de novo usuário (Liderança) */}

@@ -91,6 +91,7 @@ export function StageSimulator({
   onFilePicked,
 }: StageSimulatorProps) {
   const [media, setMedia] = useState<LoadedPreviewMedia | null>(null);
+  const [nonVisualNotice, setNonVisualNotice] = useState<string | null>(null);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [showLyricsOverlay, setShowLyricsOverlay] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -111,6 +112,7 @@ export function StageSimulator({
   const loadLocalFile = useCallback(
     async (file: File) => {
       setBlockError(null);
+      setNonVisualNotice(null);
       const ext = getExtension(file.name);
       const preCheck = validateMediaForHolyrics({
         filename: file.name,
@@ -125,6 +127,10 @@ export function StageSimulator({
       }
 
       if (preCheck.category === 'AUDIO' || preCheck.category === 'DOCUMENT') {
+        setMedia(null);
+        setNonVisualNotice(
+          `${file.name} validado (${preCheck.category === 'AUDIO' ? 'Áudio' : 'PDF'}) e pronto para envio abaixo.`,
+        );
         onFilePicked?.(file);
         return;
       }
@@ -341,17 +347,17 @@ export function StageSimulator({
           <button
             type="button"
             onClick={() => setShowLyricsOverlay((v) => !v)}
-            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
+            className={`btn-rb-surface inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
               showLyricsOverlay
                 ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-                : 'border-white/12 text-zinc-300 hover:bg-white/5'
+                : 'border-white/12 text-zinc-300'
             }`}
           >
             <Eye className="h-4 w-4" />
             <span>Testar letra por cima</span>
           </button>
 
-          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-xs font-semibold text-white hover:bg-[#0080DC]">
+          <label className="btn-rb-primary inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg px-4 text-xs font-semibold text-white">
             <Upload className="h-4 w-4" />
             <span>{media ? 'Trocar mídia no telão' : 'Importar mídia no telão'}</span>
             <input
@@ -462,6 +468,13 @@ export function StageSimulator({
         <div className="flex items-start gap-2.5 rounded-lg border border-red-500/45 bg-red-500/12 p-3.5 text-sm text-red-200">
           <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
           <span>{blockError}</span>
+        </div>
+      )}
+
+      {nonVisualNotice && !blockError && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          <span>{nonVisualNotice}</span>
         </div>
       )}
 

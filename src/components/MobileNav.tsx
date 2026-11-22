@@ -20,8 +20,8 @@ interface MobileNavProps {
 const PRIMARY_ITEMS: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: 'inicio', label: 'Início', icon: Home },
   { id: 'culto', label: 'Culto', icon: Radio },
-  { id: 'meditacao', label: 'Meditação', icon: BookOpen },
   { id: 'escalas', label: 'Escalas', icon: CalendarDays },
+  { id: 'meditacao', label: 'MDO', icon: BookOpen },
 ];
 
 export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
@@ -60,19 +60,15 @@ export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
             <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#0B0C0F]">
               {[
                 { id: 'inicio' as TabId, label: 'Início', icon: Home },
-                { id: 'musicas' as TabId, label: 'Músicas', icon: Music },
                 {
                   id: 'programacao' as TabId,
                   label: 'Programação e Mídias',
                   icon: MonitorPlay,
                 },
+                { id: 'musicas' as TabId, label: 'Músicas', icon: Music },
                 { id: 'culto' as TabId, label: 'Culto', icon: Radio },
-                {
-                  id: 'meditacao' as TabId,
-                  label: 'Controle de Meditação',
-                  icon: BookOpen,
-                },
                 { id: 'escalas' as TabId, label: 'Escalas', icon: CalendarDays },
+                { id: 'meditacao' as TabId, label: 'MDO do Sábado', icon: BookOpen },
                 { id: 'configuracoes' as TabId, label: 'Configurações', icon: Settings },
               ].map((item) => {
                 const Icon = item.icon;

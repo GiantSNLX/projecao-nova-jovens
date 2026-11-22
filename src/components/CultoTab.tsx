@@ -200,7 +200,7 @@ export function CultoTab({
           )}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-1.5">
+        <div className="grid w-full shrink-0 grid-cols-3 gap-1.5 sm:flex sm:w-auto">
           <button
             type="button"
             onClick={() => {
@@ -208,18 +208,18 @@ export function CultoTab({
               setAdjustingMediaId(null);
               setAdjustmentReason('');
             }}
-            className="inline-flex min-h-[38px] items-center gap-1 rounded-lg bg-[#0095FF] px-3 text-xs font-semibold text-white hover:bg-[#0082E0]"
+            className="btn-rb-primary inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-white"
           >
-            <Play className="h-3.5 w-3.5" />
+            <Play className="h-3.5 w-3.5 shrink-0" />
             <span>Testar</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleDownloadIndividualMedia(m)}
-            className="inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-white/12 px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5"
+            className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2.5 text-xs font-medium text-zinc-200"
           >
-            <Download className="h-3.5 w-3.5" />
+            <Download className="h-3.5 w-3.5 shrink-0" />
             <span>Baixar</span>
           </button>
 
@@ -229,9 +229,9 @@ export function CultoTab({
               setAdjustingMediaId(adjustingMediaId === m.id ? null : m.id);
               setAdjustmentReason(m.adjustmentRequest?.reason ?? '');
             }}
-            className="inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-[#F5C41E]/35 px-2.5 text-xs font-medium text-[#F5C41E] hover:bg-[#F5C41E]/10"
+            className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-[#F5C41E]/35 px-2.5 text-xs font-medium text-[#F5C41E] hover:bg-[#F5C41E]/10"
           >
-            <AlertTriangle className="h-3.5 w-3.5" />
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             <span>Ajuste</span>
           </button>
         </div>
@@ -364,48 +364,52 @@ export function CultoTab({
                   {linkedSong && (
                     <div className="mt-2 space-y-2">
                       {linkedSong.rawLyrics.trim() ? (
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleCopySong(linkedSong, 'two')}
-                            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5"
-                          >
-                            <Copy className="h-3.5 w-3.5 text-[#0095FF]" />
-                            <span>
-                              {copiedKey === `${linkedSong.id}-two`
-                                ? 'Copiado!'
-                                : 'Principal (2 linhas)'}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadSong(linkedSong, 'two')}
-                            aria-label={`Baixar ${linkedSong.title} 2 linhas`}
-                            className="inline-flex min-h-[38px] items-center rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs text-zinc-300 hover:bg-white/5"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
+                        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void handleCopySong(linkedSong, 'two')}
+                              className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 sm:flex-initial"
+                            >
+                              <Copy className="h-3.5 w-3.5 shrink-0 text-[#0095FF]" />
+                              <span className="truncate">
+                                {copiedKey === `${linkedSong.id}-two`
+                                  ? 'Copiado!'
+                                  : 'Principal (2 linhas)'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSong(linkedSong, 'two')}
+                              aria-label={`Baixar ${linkedSong.title} 2 linhas`}
+                              className="inline-flex min-h-[38px] w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-[#0B0C0F] text-xs text-zinc-300 hover:bg-white/5"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => void handleCopySong(linkedSong, 'one')}
-                            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5"
-                          >
-                            <Copy className="h-3.5 w-3.5 text-[#F5C41E]" />
-                            <span>
-                              {copiedKey === `${linkedSong.id}-one`
-                                ? 'Copiado!'
-                                : 'Retorno / Studio (1 linha)'}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadSong(linkedSong, 'one')}
-                            aria-label={`Baixar ${linkedSong.title} 1 linha`}
-                            className="inline-flex min-h-[38px] items-center rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs text-zinc-300 hover:bg-white/5"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void handleCopySong(linkedSong, 'one')}
+                              className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5 sm:flex-initial"
+                            >
+                              <Copy className="h-3.5 w-3.5 shrink-0 text-[#F5C41E]" />
+                              <span className="truncate">
+                                {copiedKey === `${linkedSong.id}-one`
+                                  ? 'Copiado!'
+                                  : 'Retorno / Studio (1)'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSong(linkedSong, 'one')}
+                              aria-label={`Baixar ${linkedSong.title} 1 linha`}
+                              className="inline-flex min-h-[38px] w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-[#0B0C0F] text-xs text-zinc-300 hover:bg-white/5"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
 
                           <button
                             type="button"
@@ -415,10 +419,10 @@ export function CultoTab({
                               );
                               setAdjustmentReason(linkedSong.adjustmentRequest?.reason ?? '');
                             }}
-                            className="inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-[#F5C41E]/35 px-2.5 text-xs font-medium text-[#F5C41E] hover:bg-[#F5C41E]/10"
+                            className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-[#F5C41E]/35 px-2.5 text-xs font-medium text-[#F5C41E] hover:bg-[#F5C41E]/10"
                           >
                             <AlertTriangle className="h-3.5 w-3.5" />
-                            <span>Ajuste</span>
+                            <span>Solicitar ajuste</span>
                           </button>
                         </div>
                       ) : (

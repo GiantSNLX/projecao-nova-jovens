@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,9 +7,9 @@ import {
   FileUp,
   Film,
   Image as ImageIcon,
-  Info,
   Loader2,
   Music,
+  Pause,
   Play,
   Plus,
   Trash2,
@@ -28,7 +28,6 @@ import type {
   ServiceState,
 } from '../types/portal';
 import {
-  HOLYRICS_SPECS,
   SAMPLE_SCHEDULE_TEXT,
   TEAM_LABELS,
 } from '../data/initialState';
@@ -76,8 +75,8 @@ const MEDIA_ROLE_OPTIONS: {
 const ROLE_BADGE_LABELS: Record<MediaRoleLabel, string> = {
   VIDEO: 'Vídeo',
   IMAGEM: 'Imagem',
-  BG: 'BG (Áudio)',
-  APRESENTACAO: 'Apresentação',
+  BG: 'BG',
+  APRESENTACAO: 'Slides',
 };
 
 export function ProgrammingTab({
@@ -91,9 +90,7 @@ export function ProgrammingTab({
   onToggleApproveMedia,
   onRemoveMediaAsset,
 }: ProgrammingTabProps) {
-  const [showSpecs, setShowSpecs] = useState(false);
-
-  // Schedule OCR state (compact at top)
+  // Schedule OCR state
   const [showScheduleEditor, setShowScheduleEditor] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -102,7 +99,7 @@ export function ProgrammingTab({
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
-  // Inline per-item media attachment drawer state ('EXTRA' for standalone media)
+  // Modal state for attaching media to a schedule row (or 'EXTRA' for standalone media)
   const [attachingTargetId, setAttachingTargetId] = useState<string | null>(null);
   const [mediaRole, setMediaRole] = useState<MediaRoleLabel>('VIDEO');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -113,13 +110,27 @@ export function ProgrammingTab({
   const [targetScreen, setTargetScreen] = useState<ScreenTarget>('ALL');
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Simulator preview state
+  // Simulator & inline playback state
+  const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [simulatorUrl, setSimulatorUrl] = useState<string | undefined>(undefined);
   const [simulatorFilename, setSimulatorFilename] = useState<string | undefined>(undefined);
+  const [simulatorPlaying, setSimulatorPlaying] = useState<boolean>(false);
+
+  // Inline audio player for BG tracks
+  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
 
   const sortedRunItems = useMemo(
     () => state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex),
     [state.runItems],
+  );
+
+  const attachingItem = useMemo(
+    () =>
+      attachingTargetId && attachingTargetId !== 'EXTRA'
+        ? sortedRunItems.find((i) => i.id === attachingTargetId)
+        : undefined,
+    [attachingTargetId, sortedRunItems],
   );
 
   const openAttachForRunItem = (item: RunItem, defaultRole: MediaRoleLabel = 'VIDEO') => {
@@ -170,7 +181,6 @@ export function ProgrammingTab({
       return;
     }
 
-    // Auto-adjust mediaRole badge to match actual file category
     if (check.category === 'AUDIO') setMediaRole('BG');
     else if (check.category === 'DOCUMENT') setMediaRole('APRESENTACAO');
     else if (check.category === 'IMAGE') setMediaRole('IMAGEM');
@@ -182,10 +192,11 @@ export function ProgrammingTab({
     if (check.category === 'VIDEO' || check.category === 'IMAGE') {
       setSimulatorUrl(url);
       setSimulatorFilename(file.name);
+      setSimulatorPlaying(check.category === 'VIDEO');
     }
   };
 
-  const handleConfirmAttach = async (e: React.FormEvent, item?: RunItem) => {
+  const handleConfirmAttach = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingFile) {
       setUploadError('Escolha um arquivo válido antes de salvar.');
@@ -210,6 +221,7 @@ export function ProgrammingTab({
       return;
     }
 
+    const item = attachingItem;
     const ext = getExtension(pendingFile.name);
     const baseName = sanitizeSlug(pendingFile.name.slice(0, pendingFile.name.length - ext.length));
     const roleTag = mediaRole === 'BG' ? 'BG_' : '';
@@ -247,10 +259,72 @@ export function ProgrammingTab({
     };
 
     onAddMediaAsset(newAsset, pendingFile);
+    setActiveMediaId(newAsset.id);
     setPendingFile(null);
     setAttachingTargetId(null);
     setMediaNote('');
     setRequestedBy('');
+  };
+
+  const handleInlinePlayPause = (asset: MediaAsset) => {
+    if (asset.category === 'AUDIO') {
+      if (!asset.objectUrl) return;
+      if (playingAudioId === asset.id) {
+        bgAudioRef.current?.pause();
+        setPlayingAudioId(null);
+        return;
+      }
+      if (bgAudioRef.current) {
+        bgAudioRef.current.pause();
+      }
+      const audio = new Audio(asset.objectUrl);
+      audio.onended = () => setPlayingAudioId(null);
+      bgAudioRef.current = audio;
+      setPlayingAudioId(asset.id);
+      void audio.play().catch(() => setPlayingAudioId(null));
+      return;
+    }
+
+    // For Video or Image: send to the 3-screen Telão on the right (or generate demo frame if placeholder)
+    if (asset.objectUrl) {
+      if (activeMediaId === asset.id && asset.category === 'VIDEO') {
+        setSimulatorPlaying((p) => !p);
+      } else {
+        setActiveMediaId(asset.id);
+        setSimulatorUrl(asset.objectUrl);
+        setSimulatorFilename(asset.originalFilename);
+        setSimulatorPlaying(asset.category === 'VIDEO');
+      }
+      return;
+    }
+
+    // Demo placeholder preview synthesis on canvas
+    const offscreen = document.createElement('canvas');
+    offscreen.width = 1920;
+    offscreen.height = 1080;
+    const ctx = offscreen.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#070B14';
+      ctx.fillRect(0, 0, 1920, 1080);
+      ctx.strokeStyle = '#0095FF';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(40, 40, 1840, 1000);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.font = '700 68px "Host Grotesk", sans-serif';
+      ctx.fillText(asset.normalizedFilename, 960, 510);
+      ctx.fillStyle = '#38BDF8';
+      ctx.font = '500 36px "JetBrains Mono", monospace';
+      ctx.fillText(
+        `${getMediaAssetResolutionSummary(asset)} · ${asset.targetScreen}`,
+        960,
+        580,
+      );
+      setActiveMediaId(asset.id);
+      setSimulatorUrl(offscreen.toDataURL('image/png'));
+      setSimulatorFilename(`${asset.normalizedFilename}.png`);
+      setSimulatorPlaying(false);
+    }
   };
 
   const handleScheduleImageUpload = async (file: File) => {
@@ -307,7 +381,6 @@ export function ProgrammingTab({
     setImportSuccessMsg(`Roteiro atualizado (${parsed.runItems.length} horários).`);
   };
 
-  // Compute per-row status & attached media list
   const rowsWithStatus = useMemo(() => {
     return sortedRunItems.map((item) => {
       const attachedMedia = state.mediaAssets.filter(
@@ -359,140 +432,13 @@ export function ProgrammingTab({
 
   const readyCount = rowsWithStatus.filter((r) => r.isReady).length;
 
-  const renderInlineAttachForm = (item?: RunItem) => (
-    <form
-      onSubmit={(e) => void handleConfirmAttach(e, item)}
-      className="mt-3 rounded-lg border border-[#0095FF]/40 bg-[#0B0C0F] p-3.5 space-y-3"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-white">
-          {item ? `Anexar mídia em ${item.plannedTime} – ${item.title}` : 'Anexar mídia avulsa'}
-        </span>
-        <button
-          type="button"
-          onClick={() => setAttachingTargetId(null)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-white/10 hover:text-white"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Tipo de mídia: Vídeo, Imagem, BG (Som de fundo) ou Apresentação */}
-      <div className="flex flex-wrap gap-1.5">
-        {MEDIA_ROLE_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setMediaRole(opt.value)}
-            className={`min-h-[36px] rounded-md border px-3 text-xs font-semibold transition ${
-              mediaRole === opt.value
-                ? 'btn-rb-primary border-[#0095FF] text-white'
-                : 'border-white/12 bg-[#12141A] text-zinc-300 hover:text-white'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid gap-2.5 sm:grid-cols-3">
-        <label className="flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#0095FF]/50 bg-[#12141A] px-3 text-xs font-semibold text-white hover:bg-white/[0.04]">
-          <FileUp className="h-4 w-4 shrink-0 text-[#0095FF]" />
-          <span className="truncate">
-            {pendingFile ? pendingFile.name : 'Escolher arquivo'}
-          </span>
-          <input
-            type="file"
-            accept={MEDIA_ROLE_OPTIONS.find((o) => o.value === mediaRole)?.accept}
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void validateAndSetFile(f);
-              e.target.value = '';
-            }}
-          />
-        </label>
-
-        <select
-          aria-label="Quando exibir"
-          value={displayTrigger}
-          onChange={(e) => setDisplayTrigger(e.target.value as MediaDisplayTrigger)}
-          className="min-h-[42px] rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs text-white"
-        >
-          {item && <option value="RUN_ITEM">No horário ({item.plannedTime})</option>}
-          <option value="ARRANQUE">Durante o Arranque</option>
-          <option value="ESQUETE">Durante a Esquete</option>
-          <option value="BRINCADEIRA">Durante a Brincadeira</option>
-          <option value="ON_REQUEST">Quando solicitado</option>
-        </select>
-
-        {mediaRole !== 'BG' ? (
-          <select
-            aria-label="Telas"
-            value={targetScreen}
-            onChange={(e) => setTargetScreen(e.target.value as ScreenTarget)}
-            className="min-h-[42px] rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs text-white"
-          >
-            <option value="ALL">Nos 3 telões</option>
-            <option value="CENTER">Só Telão Central</option>
-            <option value="SIDES">Só Laterais</option>
-          </select>
-        ) : (
-          <div className="flex min-h-[42px] items-center rounded-lg border border-white/8 bg-[#12141A] px-3 text-xs text-zinc-400">
-            Áudio / Player do Holyrics
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-2.5 sm:grid-cols-12">
-        {displayTrigger === 'ON_REQUEST' && (
-          <input
-            type="text"
-            required
-            value={requestedBy}
-            onChange={(e) => setRequestedBy(e.target.value)}
-            placeholder="Quem solicitará? (Ex.: Pr. Lucas)"
-            className="min-h-[40px] rounded-lg border border-white/12 bg-[#12141A] px-3 text-xs text-white placeholder:text-zinc-500 sm:col-span-5"
-          />
-        )}
-
-        <input
-          type="text"
-          value={mediaNote}
-          onChange={(e) => setMediaNote(e.target.value)}
-          placeholder="Nota para a projeção (opcional)"
-          className={`min-h-[40px] rounded-lg border border-white/12 bg-[#12141A] px-3 text-xs text-white placeholder:text-zinc-500 ${
-            displayTrigger === 'ON_REQUEST' ? 'sm:col-span-5' : 'sm:col-span-9'
-          }`}
-        />
-
-        <button
-          type="submit"
-          disabled={!pendingFile}
-          className={`btn-rb-primary min-h-[40px] rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-40 ${
-            displayTrigger === 'ON_REQUEST' ? 'sm:col-span-2' : 'sm:col-span-3'
-          }`}
-        >
-          Salvar mídia
-        </button>
-      </div>
-
-      {uploadError && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-500/45 bg-red-500/12 p-2.5 text-xs text-red-200">
-          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-          <span>{uploadError}</span>
-        </div>
-      )}
-    </form>
-  );
-
-  const renderMediaChip = (asset: MediaAsset) => {
+  const renderMediaRowItem = (asset: MediaAsset) => {
     const roleLabel = asset.mediaRole
       ? ROLE_BADGE_LABELS[asset.mediaRole]
       : asset.category === 'AUDIO'
-        ? 'BG (Áudio)'
+        ? 'BG'
         : asset.category === 'DOCUMENT'
-          ? 'Apresentação'
+          ? 'Slides'
           : asset.category === 'IMAGE'
             ? 'Imagem'
             : 'Vídeo';
@@ -506,45 +452,66 @@ export function ProgrammingTab({
             ? ImageIcon
             : Film;
 
+    const isCurrentlyPlaying =
+      asset.category === 'AUDIO'
+        ? playingAudioId === asset.id
+        : activeMediaId === asset.id &&
+          (asset.category === 'IMAGE' || simulatorPlaying);
+
     return (
       <div
         key={asset.id}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-[#12141A] px-3 py-2 text-xs"
+        className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs transition ${
+          activeMediaId === asset.id || playingAudioId === asset.id
+            ? 'border-[#0095FF]/50 bg-[#0095FF]/10'
+            : 'border-white/10 bg-[#12141A]'
+        }`}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <RoleIcon className="h-3.5 w-3.5 shrink-0 text-[#38BDF8]" />
-          <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200">
+          {/* Comando de reprodução direto na linha */}
+          {asset.category !== 'DOCUMENT' && (
+            <button
+              type="button"
+              onClick={() => handleInlinePlayPause(asset)}
+              aria-label={isCurrentlyPlaying ? 'Pausar' : 'Reproduzir'}
+              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition ${
+                isCurrentlyPlaying
+                  ? 'bg-[#0095FF] text-white'
+                  : 'border border-white/15 bg-[#0B0C0F] text-[#38BDF8] hover:bg-white/10'
+              }`}
+            >
+              {isCurrentlyPlaying && (asset.category === 'VIDEO' || asset.category === 'AUDIO') ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+
+          <RoleIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <span className="shrink-0 rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200">
             {roleLabel}
           </span>
-          <span className="truncate font-medium text-white">{asset.normalizedFilename}</span>
-          <span className="font-mono-tech hidden text-[11px] text-zinc-500 sm:inline">
-            {getMediaAssetResolutionSummary(asset)} · {formatBytes(asset.fileSizeBytes)}
-          </span>
-          {asset.note && (
-            <span className="truncate text-zinc-400">· “{asset.note}”</span>
-          )}
+          <div className="min-w-0">
+            <div className="truncate font-medium text-white">
+              {asset.normalizedFilename}
+            </div>
+            {asset.note && (
+              <div className="truncate text-[11px] text-zinc-400">{asset.note}</div>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          {asset.objectUrl && (asset.category === 'VIDEO' || asset.category === 'IMAGE') && (
-            <button
-              type="button"
-              onClick={() => {
-                setSimulatorUrl(asset.objectUrl);
-                setSimulatorFilename(asset.originalFilename);
-              }}
-              className="inline-flex min-h-[32px] items-center gap-1 rounded border border-white/12 px-2 text-[11px] text-zinc-200 hover:bg-white/5"
-            >
-              <Play className="h-3 w-3 text-[#0095FF]" />
-              <span>Telão</span>
-            </button>
-          )}
+          <span className="font-mono-tech hidden text-[11px] text-zinc-500 xl:inline">
+            {formatBytes(asset.fileSizeBytes)}
+          </span>
 
           {isLeader && (
             <button
               type="button"
               onClick={() => onToggleApproveMedia(asset.id)}
-              className={`min-h-[32px] rounded px-2 text-[11px] font-semibold ${
+              className={`h-7 rounded px-2 text-[11px] font-semibold ${
                 asset.approved
                   ? 'bg-emerald-500/15 text-emerald-300'
                   : 'bg-[#F5C41E]/15 text-[#F5C41E]'
@@ -559,7 +526,7 @@ export function ProgrammingTab({
               type="button"
               aria-label={`Remover ${asset.normalizedFilename}`}
               onClick={() => onRemoveMediaAsset(asset.id)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded border border-white/10 text-zinc-400 hover:text-red-400"
+              className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/10 text-zinc-400 hover:text-red-400"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -574,14 +541,14 @@ export function ProgrammingTab({
       <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="page-title">Programação e Mídias</h1>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
           {(['ALPHA', 'BRAVO', 'CHARLIE'] as ProgrammingTeam[]).map((t) => (
             <button
               key={t}
               type="button"
               disabled={!canEditProgramming || state.isFrozen}
               onClick={() => onChangeTeam(t)}
-              className={`min-h-[42px] rounded-lg border px-3.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+              className={`min-h-[42px] rounded-lg border px-3 text-xs font-semibold transition-colors disabled:opacity-60 sm:text-sm ${
                 state.programmingTeam === t
                   ? 'btn-rb-primary border-[#0095FF] text-white'
                   : 'btn-rb-surface border-white/12 text-zinc-300'
@@ -593,103 +560,65 @@ export function ProgrammingTab({
         </div>
       </div>
 
-      {/* 1. FORMATOS ACEITOS NO TOPO (COMPACTO) */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A]">
-        <button
-          type="button"
-          onClick={() => setShowSpecs((v) => !v)}
-          className="flex min-h-[46px] w-full items-center justify-between px-4 py-2.5 text-left text-xs font-medium text-zinc-200"
-        >
-          <span className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-[#F5C41E]" />
-            <span>
-              Formatos aceitos: Vídeos 16:9 (.mp4/.mov) · Imagens 16:9 (.png/.jpg) · BG/Áudio (.mp3/.wav) · Apresentação (.pdf)
-            </span>
-          </span>
-          <span className="shrink-0 text-xs text-[#0095FF]">
-            {showSpecs ? 'Ocultar' : 'Detalhes'}
-          </span>
-        </button>
+      {/* Layout Lado a Lado no PC: Roteiro e Anexos à Esquerda | Telão + Tipos discretos à Direita */}
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+        {/* COLUNA ESQUERDA (PC): Roteiro ordenando a entrega das mídias */}
+        <section className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-[#12141A] p-3.5 sm:p-5 lg:col-span-7">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-2 sm:justify-start">
+              <h2 className="section-title">Roteiro e Entrega</h2>
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+                <AnimatedCounter value={readyCount} />/{rowsWithStatus.length}
+              </span>
+            </div>
 
-        {showSpecs && (
-          <div className="grid gap-3 border-t border-white/10 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            {HOLYRICS_SPECS.map((spec) => (
-              <div
-                key={spec.category}
-                className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3 space-y-1"
-              >
-                <div className="text-xs font-semibold text-white">{spec.title}</div>
-                <div className="font-mono-tech text-[11px] text-[#38BDF8]">
-                  {spec.acceptedExtensions.join(' ')}
-                </div>
-                <p className="text-[11px] text-zinc-300">{spec.resolutionRule}</p>
-                <p className="text-[11px] text-zinc-500">{spec.notes}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+            {canEditProgramming && !state.isFrozen && (
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <label className="btn-rb-primary inline-flex min-h-[40px] cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white">
+                  <FileImage className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Importar roteiro</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleScheduleImageUpload(f);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
 
-      {/* 2. ROTEIRO NO TOPO ORDENANDO A ENTREGA DAS MÍDIAS */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2.5">
-            <h2 className="section-title">Roteiro e Entrega de Mídias</h2>
-            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
-              <AnimatedCounter value={readyCount} />/{rowsWithStatus.length} prontos
-            </span>
-          </div>
-
-          {canEditProgramming && !state.isFrozen && (
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="btn-rb-primary inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold text-white">
-                <FileImage className="h-3.5 w-3.5" />
-                <span>Importar imagem do roteiro</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleScheduleImageUpload(f);
-                    e.target.value = '';
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!draftScheduleText) setDraftScheduleText(SAMPLE_SCHEDULE_TEXT);
+                    setShowScheduleEditor((v) => !v);
                   }}
-                />
-              </label>
+                  className="btn-rb-surface inline-flex min-h-[40px] items-center justify-center rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300"
+                >
+                  {showScheduleEditor ? 'Fechar texto' : 'Editar horários'}
+                </button>
+              </div>
+            )}
+          </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (!draftScheduleText) setDraftScheduleText(SAMPLE_SCHEDULE_TEXT);
-                  setShowScheduleEditor((v) => !v);
-                }}
-                className="btn-rb-surface min-h-[40px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300"
-              >
-                {showScheduleEditor ? 'Fechar texto' : 'Editar horários'}
-              </button>
+          {ocrLoading && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 p-2.5 text-xs text-white">
+              <Loader2 className="h-4 w-4 animate-spin text-[#0095FF]" />
+              <span>Lendo imagem do roteiro... {ocrProgress}%</span>
             </div>
           )}
-        </div>
 
-        {ocrLoading && (
-          <div className="flex items-center gap-2 rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 p-2.5 text-xs text-white">
-            <Loader2 className="h-4 w-4 animate-spin text-[#0095FF]" />
-            <span>Lendo imagem do roteiro... {ocrProgress}%</span>
-          </div>
-        )}
-
-        {showScheduleEditor && (
-          <div className="grid gap-3 rounded-lg border border-white/10 bg-[#0B0C0F] p-3.5 lg:grid-cols-12">
-            {scheduleImagePreview && (
-              <div className="lg:col-span-4">
+          {showScheduleEditor && (
+            <div className="space-y-3 rounded-lg border border-white/10 bg-[#0B0C0F] p-3">
+              {scheduleImagePreview && (
                 <img
                   src={scheduleImagePreview}
                   alt="Roteiro"
-                  className="max-h-56 w-full rounded border border-white/10 bg-black object-contain"
+                  className="max-h-48 w-full rounded border border-white/10 bg-black object-contain"
                 />
-              </div>
-            )}
-            <div className={scheduleImagePreview ? 'lg:col-span-8' : 'lg:col-span-12'}>
+              )}
               <textarea
                 rows={5}
                 value={draftScheduleText}
@@ -697,43 +626,39 @@ export function ProgrammingTab({
                 placeholder="19h00 – Vídeo Nova Jovens 2 (1min)..."
                 className="font-mono-tech w-full rounded-lg border border-white/12 bg-[#12141A] p-2.5 text-xs text-white focus:border-[#0095FF] focus:outline-none"
               />
-              <div className="mt-2 flex justify-end gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setDraftScheduleText(SAMPLE_SCHEDULE_TEXT)}
-                  className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-zinc-300"
+                  className="min-h-[38px] rounded-lg border border-white/12 px-3 text-xs text-zinc-300"
                 >
                   Exemplo 21/11
                 </button>
                 <button
                   type="button"
                   onClick={handleApplyParsedSchedule}
-                  className="btn-rb-primary rounded-lg px-4 py-1.5 text-xs font-semibold text-white"
+                  className="btn-rb-primary min-h-[38px] rounded-lg px-4 text-xs font-semibold text-white"
                 >
                   Salvar roteiro
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {ocrError && <p className="text-xs text-red-400">{ocrError}</p>}
-        {importSuccessMsg && <p className="text-xs text-emerald-400">{importSuccessMsg}</p>}
+          {ocrError && <p className="text-xs text-red-400">{ocrError}</p>}
+          {importSuccessMsg && <p className="text-xs text-emerald-400">{importSuccessMsg}</p>}
 
-        {/* Lista compacta do roteiro com anexos de múltiplas mídias por horário */}
-        <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#0B0C0F]">
-          {rowsWithStatus.map(({ item, isSong, matchedSong, attachedMedia, isReady }) => {
-            const isAttachingHere = attachingTargetId === item.id;
-
-            return (
+          {/* Linhas do roteiro compactas com Play/Pause nas próprias mídias */}
+          <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#0B0C0F]">
+            {rowsWithStatus.map(({ item, isSong, matchedSong, attachedMedia, isReady }) => (
               <div
                 key={item.id}
                 className={`p-3 transition-colors ${
                   isReady ? 'bg-emerald-500/[0.04]' : ''
                 }`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span
                       className={`font-mono-tech shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${
                         isReady
@@ -747,31 +672,23 @@ export function ProgrammingTab({
                     <span className="truncate text-sm font-medium text-white">
                       {item.title}
                     </span>
-
-                    {item.durationMinutes > 0 && (
-                      <span className="font-mono-tech text-xs text-zinc-500">
-                        {item.durationMinutes}m
-                      </span>
-                    )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    {isSong && (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {isSong ? (
                       <span
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
+                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${
                           isReady
                             ? 'bg-emerald-500/15 text-emerald-300'
                             : 'bg-[#F5C41E]/15 text-[#F5C41E]'
                         }`}
                       >
                         <Music className="h-3 w-3" />
-                        <span>{isReady ? 'Letra OK' : 'Falta letra'}</span>
+                        <span>{isReady ? 'Letra OK' : 'Falta'}</span>
                       </span>
-                    )}
-
-                    {!isSong && item.itemType !== 'CLOSING' && (
+                    ) : item.itemType !== 'CLOSING' ? (
                       <span
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
+                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium ${
                           attachedMedia.length > 0
                             ? 'bg-emerald-500/15 text-emerald-300'
                             : item.requiresMedia
@@ -782,7 +699,7 @@ export function ProgrammingTab({
                         {attachedMedia.length > 0 ? (
                           <>
                             <CheckCircle2 className="h-3 w-3" />
-                            <span>{attachedMedia.length} mídia(s)</span>
+                            <span>{attachedMedia.length}</span>
                           </>
                         ) : item.requiresMedia ? (
                           <>
@@ -793,92 +710,254 @@ export function ProgrammingTab({
                           <span>Livre</span>
                         )}
                       </span>
-                    )}
+                    ) : null}
 
                     {canEditProgramming && !state.isFrozen && item.itemType !== 'CLOSING' && (
                       <button
                         type="button"
                         onClick={() =>
-                          isAttachingHere
-                            ? setAttachingTargetId(null)
-                            : openAttachForRunItem(item, isSong ? 'BG' : 'VIDEO')
+                          openAttachForRunItem(item, isSong ? 'BG' : 'VIDEO')
                         }
                         className="btn-rb-surface inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs font-medium text-[#38BDF8] hover:text-white"
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        <span>Anexar mídia</span>
+                        <span>Anexar</span>
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Músicas vinculadas */}
-                {isSong && matchedSong && matchedSong.notes && (
-                  <p className="mt-1.5 text-xs text-zinc-400">
-                    Nota da Música: {matchedSong.notes}
+                {isSong && matchedSong?.notes && (
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Obs. Música: {matchedSong.notes}
                   </p>
                 )}
 
-                {/* Lista de mídias anexadas a este horário (suporta várias: vídeo, imagem, BG, apresentação) */}
                 {attachedMedia.length > 0 && (
                   <div className="mt-2 space-y-1.5">
-                    {attachedMedia.map((m) => renderMediaChip(m))}
+                    {attachedMedia.map((m) => renderMediaRowItem(m))}
                   </div>
                 )}
-
-                {isAttachingHere && renderInlineAttachForm(item)}
               </div>
-            );
-          })}
-        </div>
-
-        {/* Mídias avulsas / Quando solicitado / Esquete / Brincadeira */}
-        <div className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-zinc-300">
-              Mídias avulsas — Quando solicitado, Esquete ou Brincadeira ({extraMedia.length})
-            </span>
-            {canEditProgramming && !state.isFrozen && (
-              <button
-                type="button"
-                onClick={() =>
-                  attachingTargetId === 'EXTRA'
-                    ? setAttachingTargetId(null)
-                    : openAttachExtra()
-                }
-                className="btn-rb-surface inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs font-medium text-[#38BDF8]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Anexar mídia avulsa</span>
-              </button>
-            )}
+            ))}
           </div>
 
-          {extraMedia.length > 0 && (
-            <div className="mt-2 space-y-1.5">
-              {extraMedia.map((m) => (
-                <div key={m.id} className="space-y-1">
-                  {renderMediaChip(m)}
-                  <p className="pl-2 text-[11px] text-[#38BDF8]">
-                    {describeMediaTrigger(m, state)}
-                  </p>
-                </div>
-              ))}
+          {/* Mídias avulsas */}
+          <div className="rounded-xl border border-white/10 bg-[#0B0C0F] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-zinc-300">
+                Mídias avulsas ({extraMedia.length})
+              </span>
+              {canEditProgramming && !state.isFrozen && (
+                <button
+                  type="button"
+                  onClick={openAttachExtra}
+                  className="btn-rb-surface inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs font-medium text-[#38BDF8]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Anexar avulsa</span>
+                </button>
+              )}
             </div>
-          )}
 
-          {attachingTargetId === 'EXTRA' && renderInlineAttachForm(undefined)}
+            {extraMedia.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {extraMedia.map((m) => (
+                  <div key={m.id} className="space-y-1">
+                    {renderMediaRowItem(m)}
+                    <p className="pl-2 text-[11px] text-[#38BDF8]">
+                      {describeMediaTrigger(m, state)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* COLUNA DIREITA (PC): Telão dos 3 painéis + tipos aceitos discretos embaixo */}
+        <section className="min-w-0 rounded-xl border border-white/10 bg-[#12141A] p-3.5 sm:p-5 lg:sticky lg:top-24 lg:col-span-5">
+          <StageSimulator
+            screens={state.screens}
+            initialUrl={simulatorUrl}
+            initialFilename={simulatorFilename}
+            externalPlaying={simulatorPlaying}
+            onPlayingChange={setSimulatorPlaying}
+          />
+        </section>
+      </div>
+
+      {/* MODAL ESPAÇOSO PARA ANEXAR MÍDIA (Confortável no celular e no PC) */}
+      {attachingTargetId && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"
+          onClick={() => setAttachingTargetId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-t-2xl border-t border-white/15 bg-[#12141A] p-5 shadow-2xl sm:rounded-2xl sm:border"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base font-semibold text-white">
+                  {attachingItem
+                    ? `${attachingItem.plannedTime} · ${attachingItem.title}`
+                    : 'Anexar mídia avulsa'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Escolha o tipo e selecione o arquivo (pode anexar várias mídias no mesmo horário).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachingTargetId(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => void handleConfirmAttach(e)} className="mt-4 space-y-4">
+              {/* Tipo: Vídeo, Imagem, BG, Apresentação */}
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Tipo de mídia
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  {MEDIA_ROLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMediaRole(opt.value)}
+                      className={`min-h-[42px] rounded-lg border px-3 text-xs font-semibold transition ${
+                        mediaRole === opt.value
+                          ? 'btn-rb-primary border-[#0095FF] text-white'
+                          : 'border-white/12 bg-[#0B0C0F] text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex min-h-[64px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#0095FF]/50 bg-[#0B0C0F] p-3 text-center hover:bg-white/[0.03]">
+                <FileUp className="h-5 w-5 text-[#0095FF]" />
+                <span className="mt-1 max-w-full truncate text-xs font-semibold text-white">
+                  {pendingFile ? pendingFile.name : 'Toque para escolher o arquivo'}
+                </span>
+                <input
+                  type="file"
+                  accept={MEDIA_ROLE_OPTIONS.find((o) => o.value === mediaRole)?.accept}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void validateAndSetFile(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-300">
+                    Quando exibir
+                  </label>
+                  <select
+                    value={displayTrigger}
+                    onChange={(e) =>
+                      setDisplayTrigger(e.target.value as MediaDisplayTrigger)
+                    }
+                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-sm text-white"
+                  >
+                    {attachingItem && (
+                      <option value="RUN_ITEM">
+                        No horário ({attachingItem.plannedTime})
+                      </option>
+                    )}
+                    <option value="ARRANQUE">Durante o Arranque</option>
+                    <option value="ESQUETE">Durante a Esquete</option>
+                    <option value="BRINCADEIRA">Durante a Brincadeira</option>
+                    <option value="ON_REQUEST">Quando solicitado</option>
+                  </select>
+                </div>
+
+                {mediaRole !== 'BG' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-300">
+                      Telas
+                    </label>
+                    <select
+                      value={targetScreen}
+                      onChange={(e) =>
+                        setTargetScreen(e.target.value as ScreenTarget)
+                      }
+                      className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-sm text-white"
+                    >
+                      <option value="ALL">Nos 3 telões</option>
+                      <option value="CENTER">Só Telão Central</option>
+                      <option value="SIDES">Só Laterais</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {displayTrigger === 'ON_REQUEST' && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-300">
+                    Quem solicitará?
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={requestedBy}
+                    onChange={(e) => setRequestedBy(e.target.value)}
+                    placeholder="Ex.: Pr. Lucas, Apresentador"
+                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-500"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-300">
+                  Nota para a projeção (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={mediaNote}
+                  onChange={(e) => setMediaNote(e.target.value)}
+                  placeholder="Ex.: Deixar o BG em loop baixo durante a fala"
+                  className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-500"
+                />
+              </div>
+
+              {uploadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-500/45 bg-red-500/12 p-3 text-xs text-red-200">
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAttachingTargetId(null)}
+                  className="btn-rb-surface min-h-[46px] rounded-lg border border-white/12 text-sm font-medium text-zinc-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!pendingFile}
+                  className="btn-rb-primary min-h-[46px] rounded-lg text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  Salvar mídia
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </section>
-
-      {/* 3. SIMULADOR DOS 3 TELÕES (16:9) */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-4 sm:p-5">
-        <StageSimulator
-          screens={state.screens}
-          initialUrl={simulatorUrl}
-          initialFilename={simulatorFilename}
-        />
-      </section>
+      )}
     </div>
   );
 }

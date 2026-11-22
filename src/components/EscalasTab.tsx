@@ -210,23 +210,27 @@ export function EscalasTab({
           <h1 className="page-title">Escalas</h1>
         </div>
 
-        <div className="inline-flex flex-wrap rounded-lg border border-white/12 bg-[#12141A] p-1">
+        <div
+          className={`grid w-full rounded-lg border border-white/12 bg-[#12141A] p-1 sm:inline-flex sm:w-auto ${
+            isLeader ? 'grid-cols-3' : 'grid-cols-2'
+          }`}
+        >
           <button
             type="button"
             onClick={() => setSubTab('ver')}
-            className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
+            className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
               activeSubTab === 'ver'
                 ? 'bg-[#0095FF] text-white'
                 : 'text-zinc-400 hover:text-white'
             }`}
           >
-            Escala da semana
+            Semana
           </button>
           {isLeader && (
             <button
               type="button"
               onClick={() => setSubTab('montar')}
-              className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
+              className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
                 activeSubTab === 'montar'
                   ? 'bg-[#0095FF] text-white'
                   : 'text-zinc-400 hover:text-white'
@@ -238,7 +242,7 @@ export function EscalasTab({
           <button
             type="button"
             onClick={() => setSubTab('arquivados')}
-            className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
+            className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
               activeSubTab === 'arquivados'
                 ? 'bg-[#0095FF] text-white'
                 : 'text-zinc-400 hover:text-white'
@@ -251,7 +255,7 @@ export function EscalasTab({
 
       {/* Seletor dos próximos sábados / múltiplos eventos no mesmo dia */}
       {activeSubTab !== 'arquivados' && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {upcomingSchedules.map((sched) => {
           const isSelected = activeSchedule?.id === sched.id;
           const locLabel = getLocationLabel(sched.locationType, sched.roomName);
@@ -260,19 +264,19 @@ export function EscalasTab({
               key={sched.id}
               type="button"
               onClick={() => setSelectedScheduleId(sched.id)}
-              className={`min-h-[54px] rounded-lg border px-3.5 py-2 text-left transition-colors ${
+              className={`min-h-[54px] w-full rounded-lg border px-3.5 py-2 text-left transition-colors ${
                 isSelected
                   ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
                   : 'border-white/10 bg-[#12141A] text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <div className="flex items-center gap-2 text-xs opacity-85">
+              <div className="flex items-center justify-between gap-2 text-xs opacity-85">
                 <span className="font-mono-tech">{formatDateBr(sched.date)}</span>
                 <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
                   {locLabel}
                 </span>
               </div>
-              <div className="mt-0.5 text-sm font-medium text-white">{sched.title}</div>
+              <div className="mt-0.5 truncate text-sm font-medium text-white">{sched.title}</div>
             </button>
           );
         })}
@@ -281,7 +285,7 @@ export function EscalasTab({
           <button
             type="button"
             onClick={() => setShowNewForm((prev) => !prev)}
-            className="inline-flex min-h-[54px] items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
+            className="inline-flex min-h-[54px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
           >
             <CalendarPlus className="h-4 w-4 text-[#0095FF]" />
             <span>Novo evento</span>

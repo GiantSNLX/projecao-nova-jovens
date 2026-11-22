@@ -276,16 +276,16 @@ export function MusicTab({
           <h1 className="page-title">Músicas</h1>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           {canEditMusic && !isFrozen && (
             <>
-              <label className="btn-rb-primary inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white">
+              <label className="btn-rb-primary inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white sm:px-4 sm:text-sm">
                 {extractingDoc ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                 ) : (
-                  <FileUp className="h-4 w-4" />
+                  <FileUp className="h-4 w-4 shrink-0" />
                 )}
-                <span>{extractingDoc ? 'Lendo...' : 'Anexar PDF / PPTX / TXT'}</span>
+                <span className="truncate">{extractingDoc ? 'Lendo...' : 'Anexar arquivo'}</span>
                 <input
                   type="file"
                   accept=".pdf,.pptx,.txt"
@@ -302,10 +302,10 @@ export function MusicTab({
               <button
                 type="button"
                 onClick={startNewSong}
-                className="btn-rb-surface inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3.5 text-sm font-medium text-white"
+                className="btn-rb-surface inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-white sm:px-3.5 sm:text-sm"
               >
-                <Plus className="h-4 w-4" />
-                <span>Nova música</span>
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="truncate">Nova música</span>
               </button>
             </>
           )}
@@ -320,7 +320,7 @@ export function MusicTab({
 
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Lista das músicas */}
-        <section className="lg:col-span-5">
+        <section className="min-w-0 lg:col-span-5">
           <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
             {sortedSongs.map((song) => {
               const hasLyrics = song.rawLyrics.trim().length > 0;
@@ -399,7 +399,7 @@ export function MusicTab({
         </section>
 
         {/* Visualização dos slides + Dados da música */}
-        <section className="space-y-5 rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-7">
+        <section className="min-w-0 space-y-5 rounded-xl border border-white/10 bg-[#12141A] p-4 sm:p-5 lg:col-span-7">
           <div className="flex items-center justify-between gap-2">
             <h2 className="section-title">
               {creatingNew
@@ -411,8 +411,8 @@ export function MusicTab({
           {/* Visualização principal de como vai ficar no telão */}
           {previewSlides.length > 0 && (
             <div className="space-y-3 rounded-xl border border-white/10 bg-[#08090C] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex rounded-lg border border-white/12 bg-[#12141A] p-1">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="grid w-full grid-cols-2 rounded-lg border border-white/12 bg-[#12141A] p-1 sm:inline-flex sm:w-auto">
                   <button
                     type="button"
                     onClick={() => {
@@ -420,7 +420,7 @@ export function MusicTab({
                       setCurrentSlideIdx(0);
                       setActiveSlideKey(null);
                     }}
-                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
+                    className={`min-h-[38px] rounded-md px-2.5 text-xs font-semibold ${
                       previewMode === 'two'
                         ? 'bg-[#0095FF] text-white'
                         : 'text-zinc-400 hover:text-white'
@@ -435,21 +435,21 @@ export function MusicTab({
                       setCurrentSlideIdx(0);
                       setActiveSlideKey(null);
                     }}
-                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
+                    className={`min-h-[38px] rounded-md px-2.5 text-xs font-semibold ${
                       previewMode === 'one'
                         ? 'bg-[#0095FF] text-white'
                         : 'text-zinc-400 hover:text-white'
                     }`}
                   >
-                    Retorno / Studio (1 linha)
+                    Retorno / Studio (1)
                   </button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
                   <button
                     type="button"
                     onClick={() => void copyVersion(previewMode)}
-                    className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
+                    className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     <span>{copiedVersion === previewMode ? 'Copiado' : 'Copiar'}</span>
@@ -457,10 +457,10 @@ export function MusicTab({
                   <button
                     type="button"
                     onClick={() => downloadVersionTxt(previewMode)}
-                    className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
+                    className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    <span>.TXT</span>
+                    <span>Baixar .TXT</span>
                   </button>
                 </div>
               </div>
@@ -487,26 +487,28 @@ export function MusicTab({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                       <button
                         type="button"
                         disabled={safeIdx === 0}
                         onClick={() => setCurrentSlideIdx((i) => Math.max(0, i - 1))}
-                        className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 disabled:opacity-40"
+                        className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-zinc-200 disabled:opacity-40"
                       >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span>Anterior</span>
+                        <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">Anterior</span>
                       </button>
 
-                      {canEditMusic && !isFrozen && (
+                      {canEditMusic && !isFrozen ? (
                         <button
                           type="button"
                           onClick={() => openSlideNoteEditor(activeKey)}
-                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-[#38BDF8] hover:bg-white/5"
+                          className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-[#38BDF8] hover:bg-white/5"
                         >
-                          <MessageSquarePlus className="h-3.5 w-3.5" />
-                          <span>{activeNote ? 'Editar nota do slide' : 'Nota neste slide'}</span>
+                          <MessageSquarePlus className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{activeNote ? 'Editar nota' : 'Nota'}</span>
                         </button>
+                      ) : (
+                        <div />
                       )}
 
                       <button
@@ -515,10 +517,10 @@ export function MusicTab({
                         onClick={() =>
                           setCurrentSlideIdx((i) => Math.min(previewSlides.length - 1, i + 1))
                         }
-                        className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 disabled:opacity-40"
+                        className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-zinc-200 disabled:opacity-40"
                       >
-                        <span>Próximo</span>
-                        <ChevronRight className="h-4 w-4" />
+                        <span className="truncate">Próximo</span>
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                       </button>
                     </div>
                   </div>

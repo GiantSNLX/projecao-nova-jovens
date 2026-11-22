@@ -412,14 +412,14 @@ export function ConfiguracoesTab({
                   </div>
 
                   {isLeader && (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto sm:items-center sm:gap-2">
                       <select
                         aria-label={`Ministério de ${member.name}`}
                         value={currentMin}
                         onChange={(e) =>
                           handleSwitchMinistry(member, e.target.value as MinistryChoice)
                         }
-                        className="min-h-[44px] rounded-lg border border-white/12 bg-[#12141A] px-2.5 text-xs text-white focus:border-[#0095FF] focus:outline-none"
+                        className="min-h-[40px] rounded-lg border border-white/12 bg-[#12141A] px-2 text-xs text-white focus:border-[#0095FF] focus:outline-none"
                       >
                         <option value="PROJECAO">Projeção</option>
                         <option value="MUSICA">Música</option>
@@ -429,7 +429,7 @@ export function ConfiguracoesTab({
                       <button
                         type="button"
                         onClick={() => handleToggleRoleFlag(member, 'CAPTAIN')}
-                        className={`min-h-[44px] rounded-lg border px-2.5 text-xs font-medium ${
+                        className={`min-h-[40px] rounded-lg border px-2 text-xs font-medium ${
                           memberIsCaptain
                             ? 'border-[#0095FF]/50 bg-[#0095FF]/15 text-[#0095FF]'
                             : 'border-white/12 text-zinc-400 hover:bg-white/5'
@@ -438,29 +438,31 @@ export function ConfiguracoesTab({
                         Capitão
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggleRoleFlag(member, 'ADMIN')}
-                        className={`min-h-[44px] rounded-lg border px-2.5 text-xs font-medium ${
-                          memberIsLeader
-                            ? 'border-[#F5C41E]/50 bg-[#F5C41E]/15 text-[#F5C41E]'
-                            : 'border-white/12 text-zinc-400 hover:bg-white/5'
-                        }`}
-                      >
-                        Liderança
-                      </button>
-
-                      {!isSelf && (
+                      <div className="flex gap-1.5">
                         <button
                           type="button"
-                          onClick={() => onRemoveMember(member.id)}
-                          title="Remover usuário"
-                          aria-label={`Remover ${member.name}`}
-                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:border-red-500/40 hover:text-red-400"
+                          onClick={() => handleToggleRoleFlag(member, 'ADMIN')}
+                          className={`min-h-[40px] flex-1 rounded-lg border px-2 text-xs font-medium ${
+                            memberIsLeader
+                              ? 'border-[#F5C41E]/50 bg-[#F5C41E]/15 text-[#F5C41E]'
+                              : 'border-white/12 text-zinc-400 hover:bg-white/5'
+                          }`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          Líder
                         </button>
-                      )}
+
+                        {!isSelf && (
+                          <button
+                            type="button"
+                            onClick={() => onRemoveMember(member.id)}
+                            title="Remover usuário"
+                            aria-label={`Remover ${member.name}`}
+                            className="inline-flex min-h-[40px] w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:border-red-500/40 hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

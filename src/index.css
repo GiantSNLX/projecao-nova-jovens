@@ -28,6 +28,11 @@
     font-size: 16px;
   }
 
+  /* Impede que filhos de CSS Grid expandam além da largura da tela no celular */
+  .grid > * {
+    min-width: 0;
+  }
+
   .font-mono-tech {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;

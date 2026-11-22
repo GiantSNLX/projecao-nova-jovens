@@ -298,7 +298,142 @@ export function DevotionalTab({
           </span>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Visualização no Celular: linhas de 2 andares sem estourar largura */}
+        <div className="mt-4 space-y-2.5 md:hidden">
+          {tableRows.map(({ member, rec }) => {
+            const isPresent = rec?.present ?? false;
+            const mVal = rec?.meditationDays ?? 0;
+            const dVal = rec?.memorizedVerses ?? 0;
+            const oVal = rec?.prayerDays ?? 0;
+
+            return (
+              <div
+                key={member.id}
+                className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-white">
+                    {member.name}
+                  </span>
+
+                  {isLeader ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateMemberRecord(member.id, { present: !isPresent })
+                      }
+                      className={`inline-flex min-h-[34px] shrink-0 items-center rounded-md border px-2.5 text-xs font-semibold ${
+                        isPresent
+                          ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                          : 'border-white/12 bg-[#12141A] text-zinc-400'
+                      }`}
+                    >
+                      {isPresent ? 'Presente' : 'Ausente'}
+                    </button>
+                  ) : (
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-md border px-2.5 py-1 text-xs font-medium ${
+                        isPresent
+                          ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
+                          : 'border-white/12 bg-[#12141A] text-zinc-400'
+                      }`}
+                    >
+                      {isPresent ? 'Presente' : 'Ausente'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
+                    <span className="block text-[10px] text-zinc-400">M (0–5)</span>
+                    {isLeader ? (
+                      <select
+                        aria-label={`M de ${member.name}`}
+                        value={mVal}
+                        onChange={(e) =>
+                          updateMemberRecord(member.id, {
+                            meditationDays: Number(e.target.value),
+                          })
+                        }
+                        className="font-mono-tech mt-1 min-h-[34px] w-full rounded border border-white/12 bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold text-white"
+                      >
+                        {[0, 1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>
+                            {n}/5
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-mono-tech mt-1 block text-xs font-semibold text-zinc-200">
+                        {mVal}/5
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
+                    <span className="block text-[10px] text-zinc-400">D (mín. 5)</span>
+                    {isLeader ? (
+                      <input
+                        type="number"
+                        min={0}
+                        max={70}
+                        aria-label={`D de ${member.name}`}
+                        value={dVal}
+                        onChange={(e) =>
+                          updateMemberRecord(member.id, {
+                            memorizedVerses: Number(e.target.value),
+                          })
+                        }
+                        className={`font-mono-tech mt-1 min-h-[34px] w-full rounded border bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold ${
+                          dVal >= 5
+                            ? 'border-emerald-500/40 text-emerald-300'
+                            : 'border-[#F5C41E]/40 text-[#F5C41E]'
+                        }`}
+                      />
+                    ) : (
+                      <span
+                        className={`font-mono-tech mt-1 block text-xs font-semibold ${
+                          dVal >= 5 ? 'text-emerald-300' : 'text-[#F5C41E]'
+                        }`}
+                      >
+                        {dVal}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
+                    <span className="block text-[10px] text-zinc-400">O (0–5)</span>
+                    {isLeader ? (
+                      <select
+                        aria-label={`O de ${member.name}`}
+                        value={oVal}
+                        onChange={(e) =>
+                          updateMemberRecord(member.id, {
+                            prayerDays: Number(e.target.value),
+                          })
+                        }
+                        className="font-mono-tech mt-1 min-h-[34px] w-full rounded border border-white/12 bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold text-white"
+                      >
+                        {[0, 1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>
+                            {n}/5
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-mono-tech mt-1 block text-xs font-semibold text-zinc-200">
+                        {oVal}/5
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tabela no Desktop */}
+        <div className="mt-4 hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 text-xs font-medium text-zinc-400">

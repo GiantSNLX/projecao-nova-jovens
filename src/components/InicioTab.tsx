@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, MonitorPlay, Music, Radio, UserCheck } from 'lucide-react';
 import type {
   AttendanceStatus,
@@ -23,6 +24,56 @@ function formatDateBr(isoDate: string): string {
   return `${d}/${m}/${y}`;
 }
 
+interface LedSlide {
+  id: string;
+  title: string;
+  subtitle?: string;
+  accent: string;
+  durationMs: number;
+  isFinal?: boolean;
+}
+
+const LED_SLIDES: LedSlide[] = [
+  {
+    id: 'culto',
+    title: 'Culto',
+    accent: 'rgba(0, 149, 255, 0.22)',
+    durationMs: 2000,
+  },
+  {
+    id: 'programacoes',
+    title: 'Programações',
+    accent: 'rgba(56, 189, 248, 0.20)',
+    durationMs: 2000,
+  },
+  {
+    id: 'congressos',
+    title: 'Congressos',
+    accent: 'rgba(245, 196, 30, 0.18)',
+    durationMs: 2000,
+  },
+  {
+    id: 'musicais',
+    title: 'Musicais',
+    accent: 'rgba(16, 185, 129, 0.18)',
+    durationMs: 2000,
+  },
+  {
+    id: 'sonho-natal',
+    title: 'Sonho de Natal',
+    accent: 'rgba(245, 196, 30, 0.22)',
+    durationMs: 2200,
+  },
+  {
+    id: 'projecao',
+    title: 'Projeção',
+    subtitle: 'Projetando a Cristo através de mídias',
+    accent: 'rgba(0, 149, 255, 0.26)',
+    durationMs: 4800,
+    isFinal: true,
+  },
+];
+
 export function InicioTab({
   state,
   activeUser,
@@ -30,6 +81,18 @@ export function InicioTab({
   onToggleServingOnDesk,
   onNavigateTab,
 }: InicioTabProps) {
+  const [slideIndex, setSlideIndex] = useState<number>(LED_SLIDES.length - 1);
+
+  useEffect(() => {
+    const current = LED_SLIDES[slideIndex];
+    const timer = window.setTimeout(() => {
+      setSlideIndex((prev) => (prev + 1) % LED_SLIDES.length);
+    }, current.durationMs);
+    return () => window.clearTimeout(timer);
+  }, [slideIndex]);
+
+  const activeSlide = LED_SLIDES[slideIndex];
+
   const myAssignment = state.assignments.find((a) => a.userId === activeUser.id);
   const team = TEAM_LABELS[state.programmingTeam];
 
@@ -42,66 +105,111 @@ export function InicioTab({
   );
 
   return (
-    <div className="space-y-8">
-      {/* Telão de boas-vindas */}
-      <SpotlightCard
-        spotlightColor="rgba(0, 149, 255, 0.16)"
-        className="rounded-xl border border-[#0095FF]/35 bg-[#07080B]"
-      >
+    <div className="space-y-6 sm:space-y-8">
+      {/* Painel de LED */}
+      <div className="rounded-2xl border border-white/15 bg-[#090B10] p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.65)] sm:p-2">
         <section
-          aria-label="Telão Projeção"
-          className="relative flex aspect-video max-h-[240px] w-full flex-col items-center justify-center px-6 text-center"
+          aria-label="Painel de LED Projeção"
+          className="relative flex aspect-[16/7] min-h-[168px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#040507] px-5 text-center sm:min-h-[220px]"
         >
+          {/* Luz suave do painel conforme o slide atual */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,149,255,0.16),transparent_68%)]"
+            className="pointer-events-none absolute inset-0 transition-all duration-700"
+            style={{
+              background: `radial-gradient(ellipse at center, ${activeSlide.accent} 0%, rgba(4,5,7,0.92) 72%)`,
+            }}
           />
-          <div className="relative z-10 space-y-2">
-            <span className="font-mono-tech inline-block rounded border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium tracking-widest text-[#38BDF8]">
-              TELÃO PRINCIPAL · 16:9
-            </span>
-            <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-4xl">
-              Projeção
+
+          {/* Micro-matriz de LED sutil + divisões discretas de gabinetes */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-35"
+            style={{
+              backgroundImage:
+                'radial-gradient(rgba(255, 255, 255, 0.14) 0.75px, transparent 0.75px)',
+              backgroundSize: '4px 4px',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                'linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)',
+              backgroundSize: '25% 50%',
+            }}
+          />
+
+          {/* Conteúdo central do telão */}
+          <div key={activeSlide.id} className="relative z-10 max-w-2xl space-y-2 px-2">
+            <h2
+              className={`font-bold tracking-[-0.03em] text-white drop-shadow-[0_0_24px_rgba(0,149,255,0.35)] ${
+                activeSlide.isFinal
+                  ? 'text-2xl sm:text-5xl'
+                  : 'text-xl uppercase tracking-[0.14em] text-zinc-100 sm:text-4xl'
+              }`}
+            >
+              {activeSlide.title}
             </h2>
-            <p className="text-sm font-medium text-zinc-200 sm:text-lg">
-              Projetando a Cristo através de mídias
-            </p>
+            {activeSlide.subtitle && (
+              <p className="text-sm font-medium text-zinc-200 sm:text-xl">
+                {activeSlide.subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* Indicadores discretos na base do painel */}
+          <div className="absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
+            {LED_SLIDES.map((s, idx) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-label={s.title}
+                onClick={() => setSlideIndex(idx)}
+                className={`h-1.5 rounded-full transition-all ${
+                  idx === slideIndex
+                    ? 'w-5 bg-[#0095FF]'
+                    : 'w-1.5 bg-white/20 hover:bg-white/40'
+                }`}
+              />
+            ))}
           </div>
         </section>
-      </SpotlightCard>
+      </div>
 
-      <section className="border-b border-white/10 pb-7">
+      <section className="border-b border-white/10 pb-6">
         <p className="font-mono-tech text-xs text-zinc-400">
           {state.title} · {formatDateBr(state.serviceDate)} · {state.startsAtTime}
         </p>
-        <h1 className="page-title mt-2">Olá, {activeUser.name.split(' ')[0]}.</h1>
-        <p className="mt-2 max-w-2xl text-base text-zinc-400">
+        <h1 className="page-title mt-1.5">Olá, {activeUser.name.split(' ')[0]}.</h1>
+        <p className="mt-1 text-sm text-zinc-400">
           {myAssignment
-            ? `Você está escalado na mesa como ${DESK_POSITION_INFO[myAssignment.position].label}.`
+            ? `Escalado na mesa como ${DESK_POSITION_INFO[myAssignment.position].label}.`
             : isProgrammingRole
-              ? 'Envie as mídias nos telões e o roteiro da semana para cair direto no painel do Culto.'
+              ? `Equipe ${team.name} ativa nesta semana.`
               : isMusicRole
-                ? 'Envie as letras das músicas em 1 linha (Retorno/Studio) e 2 linhas (Principal).'
-                : 'Acompanhe o andamento do culto da semana e registre seu MDO de sábado.'}
+                ? `${songsWithLyrics} de ${state.songs.length} letras prontas.`
+                : 'Confira a programação do sábado.'}
         </p>
 
-        {/* Ação principal conforme papel do usuário */}
-        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+        {/* Botões proporcionais no celular (grid-cols-2 quando há 2 botões) */}
+        <div className="mt-4 grid grid-cols-1 gap-2.5 sm:flex sm:flex-wrap">
           {myAssignment ? (
-            <>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <button
                 type="button"
                 onClick={() => onToggleServingOnDesk(myAssignment.id)}
-                className={`group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold ${
+                className={`inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-4 text-xs font-semibold sm:text-sm ${
                   myAssignment.servingOnDesk
                     ? 'btn-rb-surface border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
                     : 'btn-rb-primary text-white'
                 }`}
               >
-                <UserCheck className="h-4 w-4 transition-transform group-hover:scale-110" />
-                <span>
+                <UserCheck className="h-4 w-4 shrink-0" />
+                <span className="truncate">
                   {myAssignment.servingOnDesk
-                    ? `Estou na mesa (${DESK_POSITION_INFO[myAssignment.position].label})`
+                    ? `Na mesa (${DESK_POSITION_INFO[myAssignment.position].short})`
                     : 'Estou na mesa'}
                 </span>
               </button>
@@ -114,52 +222,50 @@ export function InicioTab({
                     myAssignment.attendanceStatus === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
                   )
                 }
-                className="btn-rb-surface inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/12 px-5 text-sm font-medium text-zinc-200"
+                className="btn-rb-surface inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg border border-white/12 px-4 text-xs font-medium text-zinc-200 sm:text-sm"
               >
-                <CheckCircle2 className="h-4 w-4 text-[#0095FF]" />
-                <span>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#0095FF]" />
+                <span className="truncate">
                   {myAssignment.attendanceStatus === 'CONFIRMED'
                     ? 'Escala confirmada'
                     : 'Confirmar escala'}
                 </span>
               </button>
-            </>
+            </div>
           ) : isProgrammingRole ? (
             <button
               type="button"
               onClick={() => onNavigateTab('programacao')}
-              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
+              className="btn-rb-primary inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
-              <span>Testar mídias e importar roteiro</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <span>Abrir Programação e Mídias</span>
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : isMusicRole ? (
             <button
               type="button"
               onClick={() => onNavigateTab('musicas')}
-              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
+              className="btn-rb-primary inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
-              <span>Enviar letras das músicas</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <span>Abrir Músicas</span>
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <button
               type="button"
               onClick={() => onNavigateTab('meditacao')}
-              className="btn-rb-primary group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
+              className="btn-rb-primary inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
             >
               <span>Registrar meu MDO</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="h-4 w-4" />
             </button>
           )}
         </div>
       </section>
 
-      {/* Fluxo semanal: Programação + Músicas -> Culto */}
+      {/* Atalhos rápidos */}
       <section>
-        <h2 className="section-title">Fluxo da semana (dos ministérios para a Projeção)</h2>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <SpotlightCard className="group rounded-xl border border-white/10 bg-[#12141A] transition-colors hover:border-[#0095FF]/40">
             <button
               type="button"
@@ -168,17 +274,13 @@ export function InicioTab({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-zinc-400">
-                  1. Programação {team.name}
+                  Programação {team.name}
                 </span>
                 <GlassIconBadge icon={MonitorPlay} size="sm" tone="blue" />
               </div>
               <div className="mt-2 text-base font-semibold text-white">
                 {state.runItems.length} horários · {state.mediaAssets.length} mídias
               </div>
-              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#38BDF8]">
-                <span>Abrir Programação e Mídias</span>
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </span>
             </button>
           </SpotlightCard>
 
@@ -189,16 +291,12 @@ export function InicioTab({
               className="w-full p-4 text-left"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-400">2. Ministério de Música</span>
+                <span className="text-xs font-medium text-zinc-400">Músicas</span>
                 <GlassIconBadge icon={Music} size="sm" tone="emerald" />
               </div>
               <div className="mt-2 text-base font-semibold text-white">
                 {songsWithLyrics} de {state.songs.length} letras prontas
               </div>
-              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
-                <span>Abrir Músicas</span>
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </span>
             </button>
           </SpotlightCard>
 
@@ -209,27 +307,24 @@ export function InicioTab({
               className="w-full p-4 text-left"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-400">3. Projeção (Culto)</span>
+                <span className="text-xs font-medium text-zinc-400">Culto</span>
                 <GlassIconBadge icon={Radio} size="sm" tone="gold" />
               </div>
               <div className="mt-2 text-base font-semibold text-white">
-                Conferir tudo para o Holyrics
+                Painel e pacote Holyrics
               </div>
-              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#F5C41E]">
-                <span>Abrir painel do Culto</span>
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </span>
             </button>
           </SpotlightCard>
         </div>
 
-        <p className="mt-4 text-xs text-zinc-400">
-          Seu MDO deste sábado ({formatDateBr(state.serviceDate)}):{' '}
-          <span className="font-mono-tech text-zinc-200">
-            M {myMdo?.meditationDays ?? 0}/5 · D {myMdo?.memorizedVerses ?? 0} vers. · O{' '}
-            {myMdo?.prayerDays ?? 0}/5
-          </span>
-        </p>
+        {myMdo && (
+          <p className="mt-4 text-xs text-zinc-400">
+            MDO ({formatDateBr(state.serviceDate)}):{' '}
+            <span className="font-mono-tech text-zinc-200">
+              M {myMdo.meditationDays}/5 · D {myMdo.memorizedVerses} · O {myMdo.prayerDays}/5
+            </span>
+          </p>
+        )}
       </section>
     </div>
   );

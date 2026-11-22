@@ -168,12 +168,16 @@ export function CultoTab({
     setAdjustmentReason('');
   };
 
-  const renderMediaActionCard = (m: MediaAsset) => (
+  const renderMediaActionCard = (m: MediaAsset, compact = false) => (
     <div
       key={m.id}
       className="mt-2 rounded-lg border border-white/10 bg-[#0B0C0F] p-3 text-xs"
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div
+        className={`flex flex-col gap-2.5 ${
+          compact ? '' : 'sm:flex-row sm:items-start sm:justify-between'
+        }`}
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium text-white">{m.normalizedFilename}</span>
@@ -460,7 +464,7 @@ export function CultoTab({
             {onDemandMedia.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-500">Nenhuma mídia avulsa enviada.</p>
             ) : (
-              <div className="mt-2">{onDemandMedia.map((m) => renderMediaActionCard(m))}</div>
+              <div className="mt-2">{onDemandMedia.map((m) => renderMediaActionCard(m, true))}</div>
             )}
           </div>
 

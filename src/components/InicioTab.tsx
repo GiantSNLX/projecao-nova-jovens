@@ -35,7 +35,7 @@ export function InicioTab({
     <div className="space-y-8">
       <section className="border-b border-white/10 pb-7">
         <p className="font-mono-tech text-xs text-zinc-400">
-          {state.serviceDate} · {state.startsAtTime} · Programação {team.name}
+          {state.title} · {state.serviceDate} · {state.startsAtTime}
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
           Olá, {activeUser.name.split(' ')[0]}.

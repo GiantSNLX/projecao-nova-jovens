@@ -20,6 +20,44 @@ function classifyItemType(title: string): RunItemType {
   return 'PROGRAMMING';
 }
 
+function normalizeTimePrefix(rawLine: string): string {
+  return rawLine
+    .replace(/^[lI](\d)/, '1$1')
+    .replace(/(\d{1,2})[hH]([oO0]{2})/, '$1h00')
+    .replace(/(\d{1,2})[hH:](\d{2})/, '$1:$2');
+}
+
+/**
+ * Remove lixo visual do rodapé (logos "NOVA JOVENS 2 | PROGRAMAÇÃO ABC J2")
+ * mantendo apenas a linha de data/título e os horários até "FIM".
+ */
+export function cleanScheduleOcrText(rawOcr: string): string {
+  const lines = rawOcr
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const kept: string[] = [];
+
+  for (const line of lines) {
+    // Keep title/date line at top if it has a date like 21/11/2026
+    if (/\d{2}\/\d{2}\/\d{4}/.test(line) && kept.length === 0) {
+      kept.push(line);
+      continue;
+    }
+
+    const norm = normalizeTimePrefix(line);
+    if (/^\d{1,2}:\d{2}\s*/.test(norm)) {
+      kept.push(line);
+      // Stop reading right after the "FIM" line so bottom logos are ignored
+      if (/\bfim\b/i.test(line)) break;
+    }
+  }
+
+  return kept.join('\n');
+}
+
 /**
  * Interpreta o texto de um roteiro no padrão Nova Jovens (ex.: "19h00 – Vídeo Nova Jovens 2 (1min)").
  */
@@ -39,18 +77,12 @@ export function parseScheduleText(
   const detectedSongs: ServiceSong[] = [];
 
   for (const rawLine of lines) {
-    // Detect date like 21/11/2026
     const dateMatch = rawLine.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (dateMatch && !detectedDate) {
       detectedDate = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
     }
 
-    // Normalize common OCR typos in time: l9h00, 19hOO, 19:00
-    const normalizedLine = rawLine
-      .replace(/^[lI](\d)/, '1$1')
-      .replace(/(\d{1,2})[hH]([oO0]{2})/, '$1h00')
-      .replace(/(\d{1,2})[hH:](\d{2})/, '$1:$2');
-
+    const normalizedLine = normalizeTimePrefix(rawLine);
     const lineMatch = normalizedLine.match(
       /^(\d{1,2}:\d{2})\s*[–—\-=~.]*\s*(.+)$/,
     );
@@ -60,19 +92,18 @@ export function parseScheduleText(
     const plannedTime = `${timeParts[0].padStart(2, '0')}:${timeParts[1]}`;
     let rest = lineMatch[2].trim();
 
-    // Extract duration "(5min)" or "(lmin)"
     let durationMinutes = 5;
     const durMatch = rest.match(/\((\d+|[lI])\s*min\)/i);
     if (durMatch) {
-      durationMinutes = durMatch[1].toLowerCase() === 'l' || durMatch[1].toLowerCase() === 'i'
-        ? 1
-        : Number(durMatch[1]) || 5;
+      durationMinutes =
+        durMatch[1].toLowerCase() === 'l' || durMatch[1].toLowerCase() === 'i'
+          ? 1
+          : Number(durMatch[1]) || 5;
       rest = rest.replace(durMatch[0], '').trim();
     } else if (/^fim$/i.test(rest)) {
       durationMinutes = 0;
     }
 
-    // Fix common OCR M1/M2/M3/M4 reading like "Ml:" or "M1."
     rest = rest.replace(/^M([1-9lI])\s*[:.-]\s*/i, (_, num: string) => {
       const fixed = num.toLowerCase() === 'l' || num.toLowerCase() === 'i' ? '1' : num;
       return `M${fixed}: `;
@@ -128,7 +159,7 @@ export function parseScheduleText(
 }
 
 /**
- * Executa OCR real em português direto no navegador a partir de uma imagem do roteiro.
+ * Executa OCR em português direto no navegador e já limpa o rodapé dos logotipos.
  */
 export async function readScheduleFromImage(
   file: File,
@@ -146,7 +177,8 @@ export async function readScheduleFromImage(
 
   try {
     const { data } = await worker.recognize(file);
-    return parseScheduleText(data.text, teamLabel, addedBy);
+    const cleaned = cleanScheduleOcrText(data.text);
+    return parseScheduleText(cleaned || data.text, teamLabel, addedBy);
   } finally {
     await worker.terminate();
   }

@@ -254,15 +254,12 @@ export function App() {
     });
   };
 
-  const handleChangeScheduleTeam = (scheduleDate: string, team: ProgrammingTeam) => {
+  const handleChangeProgrammingTeam = (team: ProgrammingTeam) => {
     setState((prev) => ({
       ...prev,
-      programmingTeam: scheduleDate === prev.serviceDate ? team : prev.programmingTeam,
-      schedules: prev.schedules.map((s) =>
-        s.date === scheduleDate ? { ...s, programmingTeam: team } : s,
-      ),
+      programmingTeam: team,
       auditLogs: [
-        makeAudit('Programação', `definiu equipe ${team} para ${scheduleDate}.`),
+        makeAudit('Programação', `definiu equipe da programação como ${team}.`),
         ...prev.auditLogs,
       ],
     }));
@@ -273,13 +270,9 @@ export function App() {
       const sorted = prev.schedules.slice().sort((a, b) => a.date.localeCompare(b.date));
       const last = sorted[sorted.length - 1];
       const nextDate = addSevenDays(last?.date ?? prev.serviceDate);
-      const teamCycle: ProgrammingTeam[] = ['ALPHA', 'BRAVO', 'CHARLIE'];
-      const nextTeam =
-        teamCycle[(teamCycle.indexOf(last?.programmingTeam ?? 'ALPHA') + 1) % 3];
 
       const newSched: SaturdaySchedule = {
         date: nextDate,
-        programmingTeam: nextTeam,
         assignments: [
           { id: `s-${nextDate}-1`, position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
           { id: `s-${nextDate}-2`, position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
@@ -298,10 +291,6 @@ export function App() {
         ],
       };
     });
-  };
-
-  const handleChangeProgrammingTeam = (team: ProgrammingTeam) => {
-    handleChangeScheduleTeam(state.serviceDate, team);
   };
 
   const handleReplaceScheduleFromImport = (params: {
@@ -592,7 +581,6 @@ export function App() {
             onUpdateAttendance={handleUpdateAttendance}
             onToggleServingOnDesk={handleToggleServingOnDesk}
             onChangeAssignmentMember={handleChangeAssignmentMember}
-            onChangeScheduleTeam={handleChangeScheduleTeam}
             onAddNextSaturday={handleAddNextSaturday}
           />
         )}
@@ -601,7 +589,6 @@ export function App() {
           <ConfiguracoesTab
             state={state}
             isLeader={isLeader}
-            onChangeTeam={handleChangeProgrammingTeam}
             onUpdateScreen={handleUpdateScreen}
             onToggleFreeze={handleToggleFreeze}
             onResetDemo={handleResetDemo}

@@ -10,10 +10,9 @@ import type {
   AttendanceStatus,
   DeskPosition,
   MemberUser,
-  ProgrammingTeam,
   ServiceState,
 } from '../types/portal';
-import { DESK_POSITION_INFO, TEAM_LABELS } from '../data/initialState';
+import { DESK_POSITION_INFO } from '../data/initialState';
 
 interface EscalasTabProps {
   state: ServiceState;
@@ -23,7 +22,6 @@ interface EscalasTabProps {
   onUpdateAttendance: (scheduleDate: string, assignmentId: string, status: AttendanceStatus) => void;
   onToggleServingOnDesk: (scheduleDate: string, assignmentId: string) => void;
   onChangeAssignmentMember: (scheduleDate: string, assignmentId: string, userId: string) => void;
-  onChangeScheduleTeam: (scheduleDate: string, team: ProgrammingTeam) => void;
   onAddNextSaturday: () => void;
 }
 
@@ -45,7 +43,6 @@ export function EscalasTab({
   onUpdateAttendance,
   onToggleServingOnDesk,
   onChangeAssignmentMember,
-  onChangeScheduleTeam,
   onAddNextSaturday,
 }: EscalasTabProps) {
   const [subTab, setSubTab] = useState<EscalaSubTab>('ver');
@@ -62,7 +59,6 @@ export function EscalasTab({
   const activeSchedule =
     upcomingSchedules.find((s) => s.date === selectedDate) ?? upcomingSchedules[0];
 
-  // Compute how many times each projection member has served in each position (past + current check-ins)
   const historyStats = useMemo(() => {
     const deskMembers = members.filter(
       (m) => m.roles.includes('MEMBER') && (m.ministry.includes('Projeção') || m.roles.includes('CAPTAIN')),
@@ -80,7 +76,6 @@ export function EscalasTab({
       let lastServedPos: DeskPosition | null = null;
 
       for (const sched of state.schedules) {
-        // Count past schedules OR current schedule where member checked in on desk
         const shouldCount = sched.isPast === true;
         for (const asg of sched.assignments) {
           if (asg.userId === member.id && (shouldCount || asg.servingOnDesk)) {
@@ -108,14 +103,13 @@ export function EscalasTab({
 
   return (
     <div className="space-y-6">
-      {/* Header + Sub-tabs */}
       <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Escalas</h1>
           <p className="mt-1 text-sm text-zinc-400">
             {activeSubTab === 'ver'
-              ? 'Veja os próximos sábados e confirme somente a sua escala.'
-              : 'Monte as escalas dos próximos sábados e acompanhe quem já serviu em cada posição.'}
+              ? 'Veja os próximos sábados da mesa e confirme somente a sua escala.'
+              : 'Monte a escala dos próximos sábados e controle quem já serviu em cada posição.'}
           </p>
         </div>
 
@@ -186,12 +180,7 @@ export function EscalasTab({
       {activeSubTab === 'ver' && activeSchedule && (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>
-              Programação:{' '}
-              <strong className="text-white">
-                {TEAM_LABELS[activeSchedule.programmingTeam].name}
-              </strong>
-            </span>
+            <span>Mesa de Projeção (5 posições)</span>
             <span>{formatDateBr(activeSchedule.date)} · 19h00</span>
           </div>
 
@@ -227,7 +216,6 @@ export function EscalasTab({
                     </div>
                   </div>
 
-                  {/* Status para todos; botões SOMENTE na linha da própria pessoa */}
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     {!isMe ? (
                       assignment.servingOnDesk ? (
@@ -313,32 +301,13 @@ export function EscalasTab({
       {activeSubTab === 'montar' && isLeader && activeSchedule && (
         <div className="space-y-8">
           <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-            <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-white">
-                  Montar escala — {formatDateBr(activeSchedule.date)}
-                </h2>
-                <p className="text-sm text-zinc-400">
-                  Defina a equipe de Programação e quem assume cada posição na mesa.
-                </p>
-              </div>
-
-              <div className="flex gap-1.5">
-                {(['ALPHA', 'BRAVO', 'CHARLIE'] as ProgrammingTeam[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => onChangeScheduleTeam(activeSchedule.date, t)}
-                    className={`min-h-[40px] rounded-lg border px-3 text-xs font-semibold ${
-                      activeSchedule.programmingTeam === t
-                        ? 'border-[#0095FF] bg-[#0095FF] text-white'
-                        : 'border-white/12 text-zinc-300 hover:bg-white/5'
-                    }`}
-                  >
-                    {TEAM_LABELS[t].name}
-                  </button>
-                ))}
-              </div>
+            <div className="border-b border-white/10 pb-4">
+              <h2 className="text-base font-semibold text-white">
+                Montar escala da mesa — {formatDateBr(activeSchedule.date)}
+              </h2>
+              <p className="text-sm text-zinc-400">
+                Escolha quem assume cada uma das 5 posições da Projeção neste sábado.
+              </p>
             </div>
 
             <div className="mt-4 divide-y divide-white/8">
@@ -378,7 +347,6 @@ export function EscalasTab({
             </div>
           </section>
 
-          {/* Controle de quem já serviu em cada posição */}
           <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
             <h2 className="text-base font-semibold text-white">
               Controle de rodízio — Quem já serviu em cada posição
@@ -387,7 +355,6 @@ export function EscalasTab({
               Quantidade de cultos servidos por posição nos sábados registrados.
             </p>
 
-            {/* Desktop table */}
             <div className="mt-4 hidden overflow-x-auto md:block">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -434,7 +401,6 @@ export function EscalasTab({
               </table>
             </div>
 
-            {/* Mobile stacked cards (zero overflow) */}
             <div className="mt-4 space-y-2.5 md:hidden">
               {historyStats.map((row) => (
                 <div

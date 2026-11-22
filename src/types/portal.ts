@@ -81,7 +81,6 @@ export interface DeskAssignment {
 
 export interface SaturdaySchedule {
   date: string;
-  programmingTeam: ProgrammingTeam;
   isPast?: boolean;
   assignments: DeskAssignment[];
 }

@@ -1,0 +1,27 @@
+{
+  "name": "projecao-nova-jovens",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Portal operacional e de governança do Ministério de Projeção Nova Jovens 2 integrado ao Holyrics.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.app.json && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.7",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "4.4.1",
+    "tailwindcss": "4.1.7",
+    "typescript": "~5.8.3",
+    "vite": "6.3.5"
+  }
+}

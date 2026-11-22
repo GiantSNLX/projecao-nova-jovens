@@ -7,7 +7,6 @@ import type {
   AttendanceStatus,
   AuditLogEntry,
   DeskAssignment,
-  LiveItemStatus,
   MdoEntry,
   MediaAsset,
   MemberUser,
@@ -31,7 +30,7 @@ import { DevotionalTab } from './components/DevotionalTab';
 import { EscalasTab } from './components/EscalasTab';
 import { ConfiguracoesTab } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v5';
+const STORAGE_KEY = 'projecao-nova-jovens-v6';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
@@ -273,6 +272,7 @@ export function App() {
 
       const newSched: SaturdaySchedule = {
         date: nextDate,
+        title: `Culto ${nextDate.split('-').reverse().join('/')}`,
         assignments: [
           { id: `s-${nextDate}-1`, position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
           { id: `s-${nextDate}-2`, position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
@@ -290,6 +290,29 @@ export function App() {
           makeAudit('Escala', `criou escala do sábado ${nextDate}.`),
           ...prev.auditLogs,
         ],
+      };
+    });
+  };
+
+  const handleUpdateScheduleTitle = (scheduleDate: string, title: string) => {
+    setState((prev) => ({
+      ...prev,
+      title: scheduleDate === prev.serviceDate ? title : prev.title,
+      schedules: prev.schedules.map((s) =>
+        s.date === scheduleDate ? { ...s, title } : s,
+      ),
+    }));
+  };
+
+  const handleSelectServiceDate = (date: string) => {
+    setState((prev) => {
+      const found = prev.schedules.find((s) => s.date === date);
+      if (!found) return prev;
+      return {
+        ...prev,
+        serviceDate: found.date,
+        title: found.title,
+        assignments: found.assignments,
       };
     });
   };
@@ -327,41 +350,6 @@ export function App() {
     });
   };
 
-  const handleUpdateLiveItem = (itemId: string, status: LiveItemStatus) => {
-    setState((prev) => ({
-      ...prev,
-      runItems: prev.runItems.map((item) => {
-        if (item.id === itemId) {
-          return {
-            ...item,
-            liveStatus: status,
-            liveStartedAt: status === 'CURRENT' ? nowTime() : item.liveStartedAt,
-            liveFinishedAt: status === 'DONE' ? nowTime() : item.liveFinishedAt,
-          };
-        }
-        if (status === 'CURRENT' && item.liveStatus === 'CURRENT') {
-          return { ...item, liveStatus: 'DONE', liveFinishedAt: nowTime() };
-        }
-        return item;
-      }),
-    }));
-  };
-
-  const handleToggleServiceLive = () => {
-    setState((prev) => {
-      const nextLive = prev.status !== 'LIVE';
-      return {
-        ...prev,
-        status: nextLive ? 'LIVE' : 'APPROVED',
-        liveStartedAt: nextLive ? nowTime() : prev.liveStartedAt,
-        auditLogs: [
-          makeAudit('Culto', nextLive ? 'iniciou o culto ao vivo.' : 'encerrou o modo ao vivo.'),
-          ...prev.auditLogs,
-        ],
-      };
-    });
-  };
-
   const handleUpdateLiveNotes = (notes: string) => {
     setState((prev) => ({
       ...prev,
@@ -370,16 +358,77 @@ export function App() {
     }));
   };
 
-  const handleSaveOrAddSong = (song: ServiceSong) => {
+  const handleRequestMediaAdjustment = (assetId: string, reason: string) => {
     setState((prev) => {
-      const exists = prev.songs.some((s) => s.id === song.id);
+      const target = prev.mediaAssets.find((m) => m.id === assetId);
+      return {
+        ...prev,
+        mediaAssets: prev.mediaAssets.map((m) =>
+          m.id === assetId
+            ? {
+                ...m,
+                approved: false,
+                adjustmentRequest: {
+                  reason,
+                  requestedBy: activeUser.name,
+                  requestedAt: nowTime(),
+                },
+              }
+            : m,
+        ),
+        auditLogs: [
+          makeAudit(
+            'Ajuste',
+            `solicitou ajuste na mídia "${target?.normalizedFilename ?? assetId}".`,
+            reason,
+          ),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  const handleRequestSongAdjustment = (songId: string, reason: string) => {
+    setState((prev) => {
+      const target = prev.songs.find((s) => s.id === songId);
+      return {
+        ...prev,
+        songs: prev.songs.map((s) =>
+          s.id === songId
+            ? {
+                ...s,
+                approved: false,
+                adjustmentRequest: {
+                  reason,
+                  requestedBy: activeUser.name,
+                  requestedAt: nowTime(),
+                },
+              }
+            : s,
+        ),
+        auditLogs: [
+          makeAudit(
+            'Ajuste',
+            `solicitou ajuste na música "${target?.title ?? songId}".`,
+            reason,
+          ),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  const handleSaveOrAddSong = (song: ServiceSong) => {
+    const cleanSong: ServiceSong = { ...song, adjustmentRequest: undefined };
+    setState((prev) => {
+      const exists = prev.songs.some((s) => s.id === cleanSong.id);
       return {
         ...prev,
         songs: exists
-          ? prev.songs.map((s) => (s.id === song.id ? song : s))
-          : [...prev.songs, song],
+          ? prev.songs.map((s) => (s.id === cleanSong.id ? cleanSong : s))
+          : [...prev.songs, cleanSong],
         auditLogs: [
-          makeAudit('Música', `salvou a letra de "${song.title}".`),
+          makeAudit('Música', `salvou a letra de "${cleanSong.title}".`),
           ...prev.auditLogs,
         ],
       };
@@ -553,9 +602,10 @@ export function App() {
             members={INITIAL_MEMBERS}
             canOperateDesk={canOperateDesk}
             uploadedFilesMap={uploadedFilesRef.current}
-            onUpdateLiveItem={handleUpdateLiveItem}
-            onToggleServiceLive={handleToggleServiceLive}
+            onSelectServiceDate={handleSelectServiceDate}
             onUpdateLiveNotes={handleUpdateLiveNotes}
+            onRequestMediaAdjustment={handleRequestMediaAdjustment}
+            onRequestSongAdjustment={handleRequestSongAdjustment}
             onPackageGenerated={(zipName) => handlePackageGenerated(zipName)}
           />
         )}
@@ -582,6 +632,7 @@ export function App() {
             onUpdateAttendance={handleUpdateAttendance}
             onToggleServingOnDesk={handleToggleServingOnDesk}
             onChangeAssignmentMember={handleChangeAssignmentMember}
+            onUpdateScheduleTitle={handleUpdateScheduleTitle}
             onAddNextSaturday={handleAddNextSaturday}
           />
         )}

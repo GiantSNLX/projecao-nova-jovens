@@ -22,6 +22,7 @@ interface EscalasTabProps {
   onUpdateAttendance: (scheduleDate: string, assignmentId: string, status: AttendanceStatus) => void;
   onToggleServingOnDesk: (scheduleDate: string, assignmentId: string) => void;
   onChangeAssignmentMember: (scheduleDate: string, assignmentId: string, userId: string) => void;
+  onUpdateScheduleTitle: (scheduleDate: string, title: string) => void;
   onAddNextSaturday: () => void;
 }
 
@@ -50,6 +51,7 @@ export function EscalasTab({
   onUpdateAttendance,
   onToggleServingOnDesk,
   onChangeAssignmentMember,
+  onUpdateScheduleTitle,
   onAddNextSaturday,
 }: EscalasTabProps) {
   const [subTab, setSubTab] = useState<EscalaSubTab>('ver');
@@ -117,7 +119,7 @@ export function EscalasTab({
           <p className="mt-1 text-sm text-zinc-400">
             {activeSubTab === 'ver'
               ? 'Veja os próximos sábados da mesa e confirme somente a sua escala.'
-              : 'Monte a escala dos próximos sábados e controle quem já serviu em cada posição.'}
+              : 'Monte a escala, defina o nome/tema do culto e controle quem já serviu em cada posição.'}
           </p>
         </div>
 
@@ -149,25 +151,25 @@ export function EscalasTab({
         )}
       </div>
 
-      {/* Seletor dos próximos sábados */}
+      {/* Seletor dos próximos sábados com tema */}
       <div className="flex flex-wrap items-center gap-2">
-        {upcomingSchedules.map((sched, idx) => {
+        {upcomingSchedules.map((sched) => {
           const isSelected = activeSchedule?.date === sched.date;
           return (
             <button
               key={sched.date}
               type="button"
               onClick={() => setSelectedDate(sched.date)}
-              className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-medium transition-colors ${
+              className={`min-h-[48px] rounded-lg border px-3.5 py-1.5 text-left transition-colors ${
                 isSelected
                   ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
                   : 'border-white/10 bg-[#12141A] text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <span>{formatDateBr(sched.date)}</span>
-              {idx === 0 && (
-                <span className="ml-1.5 text-xs text-[#38BDF8]">(Este sábado)</span>
-              )}
+              <div className="font-mono-tech text-xs opacity-80">
+                {formatDateBr(sched.date)}
+              </div>
+              <div className="text-sm font-medium text-white">{sched.title}</div>
             </button>
           );
         })}
@@ -176,7 +178,7 @@ export function EscalasTab({
           <button
             type="button"
             onClick={onAddNextSaturday}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
+            className="inline-flex min-h-[48px] items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
           >
             <CalendarPlus className="h-4 w-4 text-[#0095FF]" />
             <span>Adicionar sábado</span>
@@ -187,9 +189,11 @@ export function EscalasTab({
       {/* SUB-ABA 1: VISUALIZAÇÃO LIMPA DA ESCALA */}
       {activeSubTab === 'ver' && activeSchedule && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>Mesa de Projeção (6 posições)</span>
-            <span>{formatDateBr(activeSchedule.date)} · 19h00</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
+            <span className="font-semibold text-white">{activeSchedule.title}</span>
+            <span className="font-mono-tech text-xs text-zinc-400">
+              {formatDateBr(activeSchedule.date)} · 19h00
+            </span>
           </div>
 
           <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
@@ -305,17 +309,34 @@ export function EscalasTab({
         </div>
       )}
 
-      {/* SUB-ABA 2: MONTAR ESCALA + CONTROLE DE QUEM JÁ SERVIU (SOMENTE LIDERANÇA) */}
+      {/* SUB-ABA 2: MONTAR ESCALA + TEMA DA NOITE + RODÍZIO (SOMENTE LIDERANÇA) */}
       {activeSubTab === 'montar' && isLeader && activeSchedule && (
         <div className="space-y-8">
           <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
             <div className="border-b border-white/10 pb-4">
               <h2 className="text-base font-semibold text-white">
-                Montar escala da mesa — {formatDateBr(activeSchedule.date)}
+                Montar escala — {formatDateBr(activeSchedule.date)}
               </h2>
               <p className="text-sm text-zinc-400">
-                Escolha quem assume cada uma das 5 posições da Projeção neste sábado.
+                Defina o tema/nome do culto (ex.: Noite Manauara, Congresso) e quem assume cada posição.
               </p>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="schedule-theme"
+                  className="block text-sm font-medium text-zinc-300"
+                >
+                  Nome / Tema do culto ou programação
+                </label>
+                <input
+                  id="schedule-theme"
+                  type="text"
+                  value={activeSchedule.title}
+                  onChange={(e) => onUpdateScheduleTitle(activeSchedule.date, e.target.value)}
+                  placeholder="Ex.: Noite Manauara, Congresso Jovens..."
+                  className="mt-1.5 min-h-[44px] w-full max-w-md rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                />
+              </div>
             </div>
 
             <div className="mt-4 divide-y divide-white/8">

@@ -329,6 +329,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
   schedules: [
     {
       date: '2026-11-07',
+      title: 'Culto Nova Jovens 2',
       isPast: true,
       assignments: [
         { id: 'h1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
@@ -341,6 +342,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       date: '2026-11-14',
+      title: 'Culto de Adoração',
       isPast: true,
       assignments: [
         { id: 'h2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
@@ -353,6 +355,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       date: '2026-11-21',
+      title: 'Culto Nova Jovens 2',
       assignments: [
         { id: 'asg-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', confirmedAt: '18:10', servingOnDesk: true, deskCheckinAt: '18:48' },
         { id: 'asg-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'CONFIRMED', confirmedAt: '17:40', servingOnDesk: true, deskCheckinAt: '18:52' },
@@ -364,6 +367,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       date: '2026-11-28',
+      title: 'Noite Manauara',
       assignments: [
         { id: 'n1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n1-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '10:15', servingOnDesk: false },
@@ -375,6 +379,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       date: '2026-12-05',
+      title: 'Congresso Jovens',
       assignments: [
         { id: 'n2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n2-2', position: 'PRINCIPAL', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
@@ -386,6 +391,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       date: '2026-12-12',
+      title: 'Culto de Encerramento',
       assignments: [
         { id: 'n3-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n3-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },

@@ -87,6 +87,7 @@ export interface DeskAssignment {
 
 export interface SaturdaySchedule {
   date: string;
+  title: string;
   isPast?: boolean;
   assignments: DeskAssignment[];
 }
@@ -108,6 +109,12 @@ export interface RunItem {
   captainNotes?: string;
 }
 
+export interface AdjustmentRequest {
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+}
+
 export interface ServiceSong {
   id: string;
   songCode?: string;
@@ -122,6 +129,7 @@ export interface ServiceSong {
   holyricsTwoLinesTxt?: string;
   approved: boolean;
   notes?: string;
+  adjustmentRequest?: AdjustmentRequest;
   addedBy: string;
 }
 
@@ -147,6 +155,7 @@ export interface MediaAsset {
   uploadedBy: string;
   createdAt: string;
   approved: boolean;
+  adjustmentRequest?: AdjustmentRequest;
   objectUrl?: string;
   isDemoPlaceholder?: boolean;
 }

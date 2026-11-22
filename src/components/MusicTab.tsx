@@ -276,6 +276,11 @@ export function MusicTab({
                         : 'Aguardando letra'}
                       {song.key ? ` · Tom ${song.key}` : ''}
                     </p>
+                    {song.adjustmentRequest && (
+                      <p className="mt-1 text-xs font-medium text-[#F5C41E]">
+                        Ajuste pedido: {song.adjustmentRequest.reason}
+                      </p>
+                    )}
                   </div>
 
                   <div

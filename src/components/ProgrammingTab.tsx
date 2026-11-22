@@ -508,6 +508,11 @@ export function ProgrammingTab({
                       {asset.note && (
                         <p className="mt-1 text-xs text-zinc-300">Nota: {asset.note}</p>
                       )}
+                      {asset.adjustmentRequest && (
+                        <p className="mt-1 rounded border border-[#F5C41E]/40 bg-[#F5C41E]/10 px-2 py-1 text-xs font-medium text-[#F5C41E]">
+                          Ajuste pedido pela Projeção: {asset.adjustmentRequest.reason}
+                        </p>
+                      )}
                       <p className="font-mono-tech mt-1 text-[11px] text-zinc-500">
                         {getMediaAssetResolutionSummary(asset)} · {formatBytes(asset.fileSizeBytes)} · {asset.targetScreen}
                       </p>

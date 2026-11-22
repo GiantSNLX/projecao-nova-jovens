@@ -2,23 +2,30 @@ import { useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  FileImage,
   FileUp,
   Info,
+  Loader2,
   Play,
-  Plus,
   Trash2,
   XCircle,
 } from 'lucide-react';
 import type {
   MediaAsset,
+  MediaDisplayTrigger,
   ProgrammingTeam,
   RunItem,
-  RunItemType,
   ScreenTarget,
+  ServiceSong,
   ServiceState,
 } from '../types/portal';
-import { HOLYRICS_SPECS, TEAM_LABELS } from '../data/initialState';
 import {
+  HOLYRICS_SPECS,
+  SAMPLE_SCHEDULE_TEXT,
+  TEAM_LABELS,
+} from '../data/initialState';
+import {
+  describeMediaTrigger,
   formatBytes,
   getExtension,
   getMediaAssetResolutionSummary,
@@ -26,16 +33,21 @@ import {
   sanitizeSlug,
   validateMediaForHolyrics,
 } from '../utils/holyrics';
+import { parseScheduleText, readScheduleFromImage } from '../utils/scheduleOcr';
 import { StageSimulator } from './StageSimulator';
 
 interface ProgrammingTabProps {
   state: ServiceState;
   canEditProgramming: boolean;
-  canApprove: boolean;
+  isLeader: boolean;
   activeUserName: string;
   onChangeTeam: (team: ProgrammingTeam) => void;
-  onAddRunItem: (item: Omit<RunItem, 'id' | 'orderIndex' | 'liveStatus'>) => void;
-  onImportBatchRunItems: (items: Omit<RunItem, 'id' | 'orderIndex' | 'liveStatus'>[]) => void;
+  onReplaceScheduleFromImport: (params: {
+    runItems: RunItem[];
+    detectedSongs: ServiceSong[];
+    detectedDate?: string;
+    sourceLabel: string;
+  }) => void;
   onAddMediaAsset: (asset: MediaAsset, rawFile?: File) => void;
   onToggleApproveMedia: (assetId: string) => void;
   onRemoveMediaAsset: (assetId: string) => void;
@@ -44,83 +56,113 @@ interface ProgrammingTabProps {
 export function ProgrammingTab({
   state,
   canEditProgramming,
-  canApprove,
+  isLeader,
   activeUserName,
   onChangeTeam,
-  onAddRunItem,
-  onImportBatchRunItems,
+  onReplaceScheduleFromImport,
   onAddMediaAsset,
   onToggleApproveMedia,
   onRemoveMediaAsset,
 }: ProgrammingTabProps) {
-  const [blockTitle, setBlockTitle] = useState('');
-  const [blockTime, setBlockTime] = useState('20:00');
-  const [blockDuration, setBlockDuration] = useState('10');
-  const [blockType, setBlockType] = useState<RunItemType>('PROGRAMMING');
-  const [blockDesc, setBlockDesc] = useState('');
-  const [batchScript, setBatchScript] = useState('');
+  // Schedule OCR state
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
+  const [draftScheduleText, setDraftScheduleText] = useState('');
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
+  // Media upload state with required "Quando exibir" + "Nota"
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [displayTrigger, setDisplayTrigger] = useState<MediaDisplayTrigger>('RUN_ITEM');
   const [uploadRunItemId, setUploadRunItemId] = useState<string>(state.runItems[0]?.id ?? '');
+  const [requestedBy, setRequestedBy] = useState('');
+  const [mediaNote, setMediaNote] = useState('');
   const [targetScreen, setTargetScreen] = useState<ScreenTarget>('ALL');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showSpecs, setShowSpecs] = useState(false);
-  const [simulatorPreview, setSimulatorPreview] = useState<{
-    url: string;
-    filename: string;
-  } | null>(null);
 
   const sortedRunItems = state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex);
 
-  const handleAddBlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!blockTitle.trim()) return;
-    onAddRunItem({
-      plannedTime: blockTime,
-      durationMinutes: Number(blockDuration) || 10,
-      title: blockTitle.trim(),
-      description: blockDesc.trim() || 'Momento da programação.',
-      itemType: blockType,
-      responsibleName: `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
-      requiresMedia: true,
+  const handleScheduleImageUpload = async (file: File) => {
+    setOcrError(null);
+    setImportSuccessMsg(null);
+    setScheduleImagePreview(URL.createObjectURL(file));
+    setOcrLoading(true);
+    setOcrProgress(0);
+
+    try {
+      const parsed = await readScheduleFromImage(
+        file,
+        `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
+        activeUserName,
+        (pct) => setOcrProgress(pct),
+      );
+      setDraftScheduleText(parsed.rawText.trim());
+    } catch {
+      setOcrError('Não foi possível ler o texto automaticamente. Cole ou edite o texto abaixo.');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleApplyParsedSchedule = () => {
+    setOcrError(null);
+    setImportSuccessMsg(null);
+    const textToParse = draftScheduleText.trim();
+    if (!textToParse) {
+      setOcrError('Suba a imagem do roteiro ou cole as linhas antes de enviar.');
+      return;
+    }
+
+    const parsed = parseScheduleText(
+      textToParse,
+      `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
+      activeUserName,
+    );
+
+    if (parsed.runItems.length === 0) {
+      setOcrError('Nenhuma linha de horário encontrada (ex.: 19h00 – Vídeo Nova Jovens 2 (1min)).');
+      return;
+    }
+
+    onReplaceScheduleFromImport({
+      runItems: parsed.runItems,
+      detectedSongs: parsed.detectedSongs,
+      detectedDate: parsed.detectedDate,
+      sourceLabel: scheduleImagePreview ? 'imagem do roteiro' : 'texto do roteiro',
     });
-    setBlockTitle('');
-    setBlockDesc('');
+
+    setUploadRunItemId(parsed.runItems[0]?.id ?? '');
+    setImportSuccessMsg(
+      `Roteiro enviado para a Projeção (${parsed.runItems.length} momentos e ${parsed.detectedSongs.length} músicas criadas em Músicas).`,
+    );
   };
 
-  const handleImportBatchScript = () => {
-    const lines = batchScript
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (lines.length === 0) return;
-
-    const parsed: Omit<RunItem, 'id' | 'orderIndex' | 'liveStatus'>[] = [];
-    for (const line of lines) {
-      const parts = line.split('|').map((p) => p.trim());
-      if (parts.length >= 2) {
-        parsed.push({
-          plannedTime: parts[0] || '19:30',
-          durationMinutes: Number(parts[1]) || 10,
-          title: parts[2] || parts[1] || 'Bloco do roteiro',
-          description: parts[3] || 'Importado no roteiro.',
-          itemType: 'PROGRAMMING',
-          responsibleName: parts[3] || `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
-          requiresMedia: true,
-        });
-      }
-    }
-    if (parsed.length > 0) {
-      onImportBatchRunItems(parsed);
-      setBatchScript('');
-    }
-  };
-
-  const handleFileUpload = async (file: File) => {
+  const handleSelectMediaForPreview = (file: File) => {
     setUploadError(null);
-    const meta = await readMediaMetadata(file);
+    const url = URL.createObjectURL(file);
+    setPendingFile(file);
+    setPendingPreviewUrl(url);
+  };
+
+  const handleConfirmMediaUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingFile) {
+      setUploadError('Selecione um arquivo de mídia primeiro para testar nos telões.');
+      return;
+    }
+    if (displayTrigger === 'ON_REQUEST' && !requestedBy.trim()) {
+      setUploadError('Informe quem vai solicitar essa mídia durante o culto.');
+      return;
+    }
+
+    setUploadError(null);
+    const meta = await readMediaMetadata(pendingFile);
     const check = validateMediaForHolyrics({
-      filename: file.name,
-      fileSizeBytes: file.size,
+      filename: pendingFile.name,
+      fileSizeBytes: pendingFile.size,
       widthPx: meta.widthPx,
       heightPx: meta.heightPx,
       screens: state.screens,
@@ -131,22 +173,30 @@ export function ProgrammingTab({
       return;
     }
 
-    const block = sortedRunItems.find((i) => i.id === uploadRunItemId) ?? sortedRunItems[0];
-    const prefix = block ? String(block.orderIndex).padStart(2, '0') : '00';
-    const ext = getExtension(file.name);
-    const baseName = sanitizeSlug(file.name.slice(0, file.name.length - ext.length));
-    const objectUrl = URL.createObjectURL(file);
+    const block = sortedRunItems.find((i) => i.id === uploadRunItemId);
+    const ext = getExtension(pendingFile.name);
+    const baseName = sanitizeSlug(pendingFile.name.slice(0, pendingFile.name.length - ext.length));
+
+    const prefix =
+      displayTrigger === 'RUN_ITEM' && block
+        ? String(block.orderIndex).padStart(2, '0')
+        : displayTrigger === 'ON_REQUEST'
+          ? 'SOLICITADO'
+          : displayTrigger;
 
     const newAsset: MediaAsset = {
       id: `med-${Date.now()}`,
-      runItemId: block?.id ?? uploadRunItemId,
+      runItemId: displayTrigger === 'RUN_ITEM' ? block?.id : undefined,
+      displayTrigger,
+      requestedBy: displayTrigger === 'ON_REQUEST' ? requestedBy.trim() : undefined,
+      note: mediaNote.trim(),
       targetScreen,
       category: check.category,
-      originalFilename: file.name,
+      originalFilename: pendingFile.name,
       normalizedFilename: `${prefix}_${baseName}${ext}`,
       extension: ext,
-      mimeType: file.type || 'application/octet-stream',
-      fileSizeBytes: file.size,
+      mimeType: pendingFile.type || 'application/octet-stream',
+      fileSizeBytes: pendingFile.size,
       widthPx: meta.widthPx,
       heightPx: meta.heightPx,
       aspectRatio: check.aspectRatio,
@@ -156,14 +206,13 @@ export function ProgrammingTab({
       uploadedBy: activeUserName,
       createdAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       approved: false,
-      objectUrl,
+      objectUrl: pendingPreviewUrl ?? URL.createObjectURL(pendingFile),
     };
 
-    onAddMediaAsset(newAsset, file);
-
-    if (check.category === 'VIDEO' || check.category === 'IMAGE') {
-      setSimulatorPreview({ url: objectUrl, filename: file.name });
-    }
+    onAddMediaAsset(newAsset, pendingFile);
+    setPendingFile(null);
+    setRequestedBy('');
+    setMediaNote('');
   };
 
   return (
@@ -174,11 +223,11 @@ export function ProgrammingTab({
             Programação e Mídias
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Importe o roteiro, envie as mídias dentro do padrão do Holyrics e teste nos três telões antes do culto.
+            Importe a imagem do roteiro, teste as mídias nos três telões e defina quando cada arquivo entra no culto.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2">
           {(['ALPHA', 'BRAVO', 'CHARLIE'] as ProgrammingTeam[]).map((t) => (
             <button
               key={t}
@@ -197,33 +246,339 @@ export function ProgrammingTab({
         </div>
       </div>
 
-      {/* Simulador dos 3 Telões */}
-      <StageSimulator
-        screens={state.screens}
-        initialUrl={simulatorPreview?.url}
-        initialFilename={simulatorPreview?.filename}
-      />
+      {/* PASSO 1: Ler imagem semanal do roteiro (OCR) */}
+      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-white">
+              1. Importar imagem do roteiro da semana
+            </h2>
+            <p className="mt-0.5 text-sm text-zinc-400">
+              Suba a imagem com os horários (ex.: 19h00 – Vídeo, M1, Arranque...). O sistema lê tudo e já cria as músicas M1..M4 automaticamente.
+            </p>
+          </div>
 
-      {/* Formatos aceitos pelo Holyrics */}
+          <div className="flex flex-wrap gap-2">
+            <label
+              className={`inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] ${
+                !canEditProgramming || state.isFrozen ? 'pointer-events-none opacity-45' : ''
+              }`}
+            >
+              <FileImage className="h-4 w-4" />
+              <span>Ler imagem do roteiro</span>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={!canEditProgramming || state.isFrozen}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleScheduleImageUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled={!canEditProgramming || state.isFrozen}
+              onClick={() => setDraftScheduleText(SAMPLE_SCHEDULE_TEXT)}
+              className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-45"
+            >
+              Carregar exemplo 21/11
+            </button>
+          </div>
+        </div>
+
+        {ocrLoading && (
+          <div className="mt-4 flex items-center gap-2.5 rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 p-3 text-sm text-white">
+            <Loader2 className="h-4 w-4 animate-spin text-[#0095FF]" />
+            <span>Lendo imagem do roteiro... {ocrProgress}%</span>
+          </div>
+        )}
+
+        {(draftScheduleText || scheduleImagePreview) && (
+          <div className="mt-4 grid gap-4 lg:grid-cols-12">
+            {scheduleImagePreview && (
+              <div className="lg:col-span-4">
+                <img
+                  src={scheduleImagePreview}
+                  alt="Imagem do roteiro importada"
+                  className="max-h-72 w-full rounded-lg border border-white/10 bg-black object-contain"
+                />
+              </div>
+            )}
+
+            <div className={scheduleImagePreview ? 'lg:col-span-8' : 'lg:col-span-12'}>
+              <label htmlFor="ocr-text" className="block text-sm font-medium text-zinc-300">
+                Texto lido do roteiro (confira ou ajuste qualquer linha antes de enviar)
+              </label>
+              <textarea
+                id="ocr-text"
+                rows={7}
+                value={draftScheduleText}
+                onChange={(e) => setDraftScheduleText(e.target.value)}
+                className="font-mono-tech mt-1.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-sm text-white focus:border-[#0095FF] focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={!canEditProgramming || state.isFrozen}
+                onClick={handleApplyParsedSchedule}
+                className="mt-3 min-h-[44px] rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-45"
+              >
+                Enviar roteiro para Projeção e Música
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ocrError && <p className="mt-3 text-sm text-red-400">{ocrError}</p>}
+        {importSuccessMsg && (
+          <p className="mt-3 text-sm text-emerald-400">{importSuccessMsg}</p>
+        )}
+      </section>
+
+      {/* PASSO 2: Preview nos 3 Telões + Enviar Mídia com Nota e Gatilho */}
+      <div className="space-y-4">
+        <StageSimulator
+          screens={state.screens}
+          initialUrl={pendingPreviewUrl ?? undefined}
+          initialFilename={pendingFile?.name}
+        />
+
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Upload Form with Nota + Quando Exibir */}
+          <form
+            onSubmit={(e) => void handleConfirmMediaUpload(e)}
+            className="space-y-4 rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6"
+          >
+            <h2 className="text-base font-semibold text-white">
+              2. Enviar mídia para a Projeção
+            </h2>
+
+            <label
+              className={`flex min-h-[84px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-3.5 text-center transition-colors ${
+                !canEditProgramming || state.isFrozen
+                  ? 'cursor-not-allowed border-white/10 opacity-45'
+                  : 'border-[#0095FF]/50 bg-[#0B0C0F] hover:bg-white/[0.03]'
+              }`}
+            >
+              <FileUp className="h-5 w-5 text-[#0095FF]" />
+              <span className="mt-1 text-sm font-medium text-white">
+                {pendingFile
+                  ? `Selecionado: ${pendingFile.name} (já no simulador acima)`
+                  : 'Escolher arquivo (vídeo, imagem, áudio ou PDF)'}
+              </span>
+              <input
+                type="file"
+                disabled={!canEditProgramming || state.isFrozen}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleSelectMediaForPreview(f);
+                }}
+              />
+            </label>
+
+            <div>
+              <label htmlFor="when-display" className="block text-sm font-medium text-zinc-300">
+                Quando essa mídia deve ser exibida?
+              </label>
+              <select
+                id="when-display"
+                value={displayTrigger}
+                onChange={(e) => setDisplayTrigger(e.target.value as MediaDisplayTrigger)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+              >
+                <option value="RUN_ITEM">Em um momento do roteiro</option>
+                <option value="ON_REQUEST">Quando solicitado</option>
+                <option value="ARRANQUE">Durante o Arranque</option>
+                <option value="ESQUETE">Durante a Esquete</option>
+                <option value="BRINCADEIRA">Durante a Brincadeira</option>
+              </select>
+            </div>
+
+            {displayTrigger === 'RUN_ITEM' && (
+              <div>
+                <label htmlFor="media-block" className="block text-sm font-medium text-zinc-300">
+                  Momento do roteiro
+                </label>
+                <select
+                  id="media-block"
+                  value={uploadRunItemId}
+                  onChange={(e) => setUploadRunItemId(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
+                >
+                  {sortedRunItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.plannedTime} – {item.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {displayTrigger === 'ON_REQUEST' && (
+              <div>
+                <label htmlFor="requested-by" className="block text-sm font-medium text-zinc-300">
+                  Quem vai solicitar?
+                </label>
+                <input
+                  id="requested-by"
+                  type="text"
+                  required
+                  value={requestedBy}
+                  onChange={(e) => setRequestedBy(e.target.value)}
+                  placeholder="Ex.: Apresentador, Pr. Lucas, Líder da Esquete"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                />
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="media-target" className="block text-sm font-medium text-zinc-300">
+                Telas
+              </label>
+              <select
+                id="media-target"
+                value={targetScreen}
+                onChange={(e) => setTargetScreen(e.target.value as ScreenTarget)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
+              >
+                <option value="ALL">Nos 3 telões</option>
+                <option value="CENTER">Só Telão Central (3840×2160)</option>
+                <option value="SIDES">Só Laterais (3200×1800)</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="media-note" className="block text-sm font-medium text-zinc-300">
+                Nota no arquivo para a Projeção
+              </label>
+              <textarea
+                id="media-note"
+                rows={2}
+                value={mediaNote}
+                onChange={(e) => setMediaNote(e.target.value)}
+                placeholder="Ex.: Deixar em loop até a equipe sair do palco..."
+                className="mt-1 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+              />
+            </div>
+
+            {uploadError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!canEditProgramming || state.isFrozen || !pendingFile}
+              className="min-h-[48px] w-full rounded-lg bg-[#0095FF] text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-40"
+            >
+              Enviar arquivo para a Projeção
+            </button>
+          </form>
+
+          {/* Media Queue sent to Projection */}
+          <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6">
+            <h2 className="text-base font-semibold text-white">
+              Mídias enviadas para a Projeção ({state.mediaAssets.length})
+            </h2>
+
+            <div className="mt-4 divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
+              {state.mediaAssets.map((asset) => (
+                <div key={asset.id} className="space-y-2 p-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        {asset.validationStatus === 'VALID' ? (
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-[#F5C41E]" />
+                        )}
+                        <span className="truncate text-sm font-medium text-white">
+                          {asset.normalizedFilename}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs font-medium text-[#38BDF8]">
+                        Quando exibir: {describeMediaTrigger(asset, state)}
+                      </p>
+                      {asset.note && (
+                        <p className="mt-1 text-xs text-zinc-300">Nota: {asset.note}</p>
+                      )}
+                      <p className="font-mono-tech mt-1 text-[11px] text-zinc-500">
+                        {getMediaAssetResolutionSummary(asset)} · {formatBytes(asset.fileSizeBytes)} · {asset.targetScreen}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap gap-1.5">
+                      {asset.objectUrl && (asset.category === 'VIDEO' || asset.category === 'IMAGE') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingPreviewUrl(asset.objectUrl!);
+                            setPendingFile(null);
+                          }}
+                          className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-white/12 px-2.5 text-xs text-white"
+                        >
+                          <Play className="h-3.5 w-3.5 text-[#0095FF]" />
+                          <span>Ver</span>
+                        </button>
+                      )}
+
+                      {isLeader && (
+                        <button
+                          type="button"
+                          onClick={() => onToggleApproveMedia(asset.id)}
+                          className={`min-h-[40px] rounded-lg px-2.5 text-xs font-semibold ${
+                            asset.approved
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : 'bg-[#F5C41E]/15 text-[#F5C41E]'
+                          }`}
+                        >
+                          {asset.approved ? 'OK' : 'Aprovar'}
+                        </button>
+                      )}
+
+                      {canEditProgramming && !state.isFrozen && (
+                        <button
+                          type="button"
+                          aria-label={`Remover ${asset.normalizedFilename}`}
+                          onClick={() => onRemoveMediaAsset(asset.id)}
+                          className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:text-red-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* Collapsible Holyrics Specs */}
       <div className="rounded-xl border border-white/10 bg-[#12141A]">
         <button
           type="button"
           onClick={() => setShowSpecs((v) => !v)}
-          className="flex min-h-[52px] w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-white"
+          className="flex min-h-[52px] w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-white"
         >
           <span className="flex items-center gap-2">
             <Info className="h-4 w-4 text-[#F5C41E]" />
-            <span>Mídias aceitas pelo Holyrics e resoluções recomendadas</span>
+            <span>Formatos aceitos pelo Holyrics</span>
           </span>
-          <span className="text-xs text-[#0095FF]">
-            {showSpecs ? 'Ocultar' : 'Ver especificações'}
-          </span>
+          <span className="text-xs text-[#0095FF]">{showSpecs ? 'Ocultar' : 'Ver'}</span>
         </button>
 
         {showSpecs && (
           <div className="divide-y divide-white/8 border-t border-white/10">
             {HOLYRICS_SPECS.map((spec) => (
-              <div key={spec.category} className="grid gap-2 p-4 sm:grid-cols-12 sm:items-start">
+              <div key={spec.category} className="grid gap-2 p-4 sm:grid-cols-12">
                 <div className="sm:col-span-3">
                   <div className="text-sm font-semibold text-white">{spec.title}</div>
                   <div className="font-mono-tech mt-1 text-xs text-[#38BDF8]">
@@ -239,269 +594,6 @@ export function ProgrammingTab({
             ))}
           </div>
         )}
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* Roteiro */}
-        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6">
-          <h2 className="text-base font-semibold text-white">Roteiro do culto</h2>
-
-          <form onSubmit={handleAddBlock} className="mt-4 space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label htmlFor="run-time" className="block text-sm font-medium text-zinc-300">
-                  Horário
-                </label>
-                <input
-                  id="run-time"
-                  type="time"
-                  disabled={!canEditProgramming || state.isFrozen}
-                  value={blockTime}
-                  onChange={(e) => setBlockTime(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
-                />
-              </div>
-              <div>
-                <label htmlFor="run-dur" className="block text-sm font-medium text-zinc-300">
-                  Duração (min)
-                </label>
-                <input
-                  id="run-dur"
-                  type="number"
-                  min={1}
-                  disabled={!canEditProgramming || state.isFrozen}
-                  value={blockDuration}
-                  onChange={(e) => setBlockDuration(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
-                />
-              </div>
-              <div>
-                <label htmlFor="run-type" className="block text-sm font-medium text-zinc-300">
-                  Tipo
-                </label>
-                <select
-                  id="run-type"
-                  disabled={!canEditProgramming || state.isFrozen}
-                  value={blockType}
-                  onChange={(e) => setBlockType(e.target.value as RunItemType)}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
-                >
-                  <option value="OPENING">Abertura</option>
-                  <option value="WORSHIP">Louvor</option>
-                  <option value="PROGRAMMING">Programação</option>
-                  <option value="ANNOUNCEMENTS">Avisos</option>
-                  <option value="WORD">Palavra</option>
-                  <option value="CLOSING">Encerramento</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="run-title" className="block text-sm font-medium text-zinc-300">
-                Nome do momento
-              </label>
-              <input
-                id="run-title"
-                type="text"
-                required
-                disabled={!canEditProgramming || state.isFrozen}
-                value={blockTitle}
-                onChange={(e) => setBlockTitle(e.target.value)}
-                placeholder="Ex.: Vídeo de chamada para o acampamento"
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="run-desc" className="block text-sm font-medium text-zinc-300">
-                Orientação para a mesa
-              </label>
-              <input
-                id="run-desc"
-                type="text"
-                disabled={!canEditProgramming || state.isFrozen}
-                value={blockDesc}
-                onChange={(e) => setBlockDesc(e.target.value)}
-                placeholder="Opcional"
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!canEditProgramming || state.isFrozen}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-40"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Adicionar ao roteiro</span>
-            </button>
-          </form>
-
-          <div className="mt-5 border-t border-white/10 pt-4">
-            <label htmlFor="batch-script" className="block text-sm font-medium text-zinc-300">
-              Importar roteiro por texto (Horário | Min | Título | Equipe)
-            </label>
-            <textarea
-              id="batch-script"
-              rows={3}
-              disabled={!canEditProgramming || state.isFrozen}
-              value={batchScript}
-              onChange={(e) => setBatchScript(e.target.value)}
-              placeholder={'20:10 | 8 | Teatro Especial | Equipe Alpha'}
-              className="mt-1.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600"
-            />
-            <button
-              type="button"
-              disabled={!canEditProgramming || state.isFrozen || !batchScript.trim()}
-              onClick={handleImportBatchScript}
-              className="mt-2 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40"
-            >
-              Importar linhas
-            </button>
-          </div>
-        </section>
-
-        {/* Envio de Mídias */}
-        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6">
-          <h2 className="text-base font-semibold text-white">Enviar mídias do culto</h2>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="media-block" className="block text-sm font-medium text-zinc-300">
-                Momento do roteiro
-              </label>
-              <select
-                id="media-block"
-                value={uploadRunItemId}
-                onChange={(e) => setUploadRunItemId(e.target.value)}
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
-              >
-                {sortedRunItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {String(item.orderIndex).padStart(2, '0')} · {item.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="media-target" className="block text-sm font-medium text-zinc-300">
-                Onde vai aparecer
-              </label>
-              <select
-                id="media-target"
-                value={targetScreen}
-                onChange={(e) => setTargetScreen(e.target.value as ScreenTarget)}
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white"
-              >
-                <option value="ALL">Nos 3 telões</option>
-                <option value="CENTER">Só Telão Central (3840×2160)</option>
-                <option value="SIDES">Só Laterais (3200×1800)</option>
-              </select>
-            </div>
-          </div>
-
-          <label
-            className={`mt-4 flex min-h-[96px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-4 text-center transition-colors ${
-              !canEditProgramming || state.isFrozen
-                ? 'cursor-not-allowed border-white/10 opacity-45'
-                : 'border-[#0095FF]/50 bg-[#0B0C0F] hover:bg-white/[0.03]'
-            }`}
-          >
-            <FileUp className="h-5 w-5 text-[#0095FF]" />
-            <span className="mt-1.5 text-sm font-medium text-white">
-              Selecionar vídeo, imagem, áudio ou PDF
-            </span>
-            <input
-              type="file"
-              disabled={!canEditProgramming || state.isFrozen}
-              className="sr-only"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFileUpload(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
-
-          {uploadError && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
-              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{uploadError}</span>
-            </div>
-          )}
-
-          <div className="mt-5 divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
-            {state.mediaAssets.map((asset) => {
-              const block = sortedRunItems.find((r) => r.id === asset.runItemId);
-              return (
-                <div
-                  key={asset.id}
-                  className="flex flex-col gap-2.5 p-3.5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      {asset.validationStatus === 'VALID' ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-[#F5C41E]" />
-                      )}
-                      <span className="truncate text-sm font-medium text-white">
-                        {asset.normalizedFilename}
-                      </span>
-                    </div>
-                    <p className="font-mono-tech mt-0.5 text-xs text-zinc-500">
-                      Bloco {block?.orderIndex ?? '?'} · {getMediaAssetResolutionSummary(asset)} ·{' '}
-                      {formatBytes(asset.fileSizeBytes)}
-                    </p>
-                  </div>
-
-                  <div className="flex shrink-0 flex-wrap gap-1.5">
-                    {asset.objectUrl && (asset.category === 'VIDEO' || asset.category === 'IMAGE') && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSimulatorPreview({
-                            url: asset.objectUrl!,
-                            filename: asset.originalFilename,
-                          })
-                        }
-                        className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-white/12 px-2.5 text-xs font-medium text-white hover:bg-white/5"
-                      >
-                        <Play className="h-3.5 w-3.5 text-[#0095FF]" />
-                        <span>Simular</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      disabled={!canApprove}
-                      onClick={() => onToggleApproveMedia(asset.id)}
-                      className={`min-h-[40px] rounded-lg px-2.5 text-xs font-semibold disabled:opacity-60 ${
-                        asset.approved
-                          ? 'bg-emerald-500/15 text-emerald-300'
-                          : 'bg-[#F5C41E]/15 text-[#F5C41E]'
-                      }`}
-                    >
-                      {asset.approved ? 'Aprovada' : 'Aprovar'}
-                    </button>
-
-                    {canEditProgramming && !state.isFrozen && (
-                      <button
-                        type="button"
-                        aria-label={`Excluir ${asset.normalizedFilename}`}
-                        onClick={() => onRemoveMediaAsset(asset.id)}
-                        className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       </div>
     </div>
   );

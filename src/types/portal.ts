@@ -34,6 +34,13 @@ export type ScreenCode = 'LEFT' | 'CENTER' | 'RIGHT';
 
 export type ScreenTarget = 'ALL' | 'CENTER' | 'SIDES' | 'LEFT' | 'RIGHT';
 
+export type MediaDisplayTrigger =
+  | 'RUN_ITEM'
+  | 'ON_REQUEST'
+  | 'ARRANQUE'
+  | 'ESQUETE'
+  | 'BRINCADEIRA';
+
 export type TabId =
   | 'inicio'
   | 'musicas'
@@ -70,7 +77,13 @@ export interface DeskAssignment {
   confirmedAt?: string;
   servingOnDesk: boolean;
   deskCheckinAt?: string;
-  notes?: string;
+}
+
+export interface SaturdaySchedule {
+  date: string;
+  programmingTeam: ProgrammingTeam;
+  isPast?: boolean;
+  assignments: DeskAssignment[];
 }
 
 export interface RunItem {
@@ -82,6 +95,7 @@ export interface RunItem {
   description: string;
   itemType: RunItemType;
   responsibleName: string;
+  songCode?: string;
   requiresMedia: boolean;
   liveStatus: LiveItemStatus;
   liveStartedAt?: string;
@@ -91,6 +105,7 @@ export interface RunItem {
 
 export interface ServiceSong {
   id: string;
+  songCode?: string;
   orderIndex: number;
   title: string;
   artist: string;
@@ -105,7 +120,10 @@ export interface ServiceSong {
 
 export interface MediaAsset {
   id: string;
-  runItemId: string;
+  runItemId?: string;
+  displayTrigger: MediaDisplayTrigger;
+  requestedBy?: string;
+  note: string;
   targetScreen: ScreenTarget;
   category: MediaCategory;
   originalFilename: string;
@@ -170,6 +188,7 @@ export interface ServiceState {
   liveNotes: string;
   screens: StageScreen[];
   assignments: DeskAssignment[];
+  schedules: SaturdaySchedule[];
   runItems: RunItem[];
   songs: ServiceSong[];
   mediaAssets: MediaAsset[];

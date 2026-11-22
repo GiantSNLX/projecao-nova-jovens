@@ -25,18 +25,15 @@ export function InicioTab({
   const myAssignment = state.assignments.find((a) => a.userId === activeUser.id);
   const team = TEAM_LABELS[state.programmingTeam];
 
-  const confirmedCount = state.assignments.filter((a) => a.attendanceStatus === 'CONFIRMED').length;
-  const servingCount = state.assignments.filter((a) => a.servingOnDesk).length;
-  const approvedSongs = state.songs.filter((s) => s.approved).length;
+  const isMusicRole = activeUser.roles.includes('MUSIC');
+  const isProgrammingRole = activeUser.roles.includes('PROGRAMMING');
+
+  const songsWithLyrics = state.songs.filter((s) => s.rawLyrics.trim().length > 0).length;
   const mdoDone = state.mdoEntries.filter((m) => m.userId === activeUser.id && m.completed).length;
-  const verseDone = state.saturdayVerses.some(
-    (v) => v.userId === activeUser.id && v.saturdayDate === state.serviceDate && v.spoken,
-  );
 
   return (
     <div className="space-y-8">
-      {/* Clean flat summary header — zero card-inside-card clutter */}
-      <section className="border-b border-white/10 pb-8">
+      <section className="border-b border-white/10 pb-7">
         <p className="font-mono-tech text-xs text-zinc-400">
           {state.serviceDate} · {state.startsAtTime} · Programação {team.name}
         </p>
@@ -45,139 +42,140 @@ export function InicioTab({
         </h1>
         <p className="mt-2 max-w-2xl text-base text-zinc-400">
           {myAssignment
-            ? `Você está escalado como ${DESK_POSITION_INFO[myAssignment.position].label} neste culto.`
-            : 'Acompanhe o preparo do culto, suas meditações e os envios da semana.'}
+            ? `Você está escalado na mesa como ${DESK_POSITION_INFO[myAssignment.position].label}.`
+            : isProgrammingRole
+              ? 'Envie a imagem do roteiro e as mídias do culto para cair direto na mesa da Projeção.'
+              : isMusicRole
+                ? 'Preencha as letras das músicas vindas do roteiro para gerar os arquivos do Holyrics.'
+                : 'Acompanhe o fluxo do culto da semana e suas meditações.'}
         </p>
 
-        {/* Direct action row for the logged-in member */}
-        {myAssignment ? (
-          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => onToggleServingOnDesk(myAssignment.id)}
-              className={`inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition-colors ${
-                myAssignment.servingOnDesk
-                  ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                  : 'bg-[#0095FF] text-white hover:bg-[#0082E0]'
-              }`}
-            >
-              <UserCheck className="h-4 w-4" />
-              <span>
-                {myAssignment.servingOnDesk
-                  ? `Em posição na mesa (${DESK_POSITION_INFO[myAssignment.position].label})`
-                  : 'Já estou servindo na mesa'}
-              </span>
-            </button>
+        {/* Primary action by user's context — zero clutter */}
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+          {myAssignment ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onToggleServingOnDesk(myAssignment.id)}
+                className={`inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition-colors ${
+                  myAssignment.servingOnDesk
+                    ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                    : 'bg-[#0095FF] text-white hover:bg-[#0082E0]'
+                }`}
+              >
+                <UserCheck className="h-4 w-4" />
+                <span>
+                  {myAssignment.servingOnDesk
+                    ? `Servindo na mesa (${DESK_POSITION_INFO[myAssignment.position].label})`
+                    : 'Já estou servindo na mesa'}
+                </span>
+              </button>
 
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAttendance(
+                    myAssignment.id,
+                    myAssignment.attendanceStatus === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
+                  )
+                }
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/12 px-5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/5"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>
+                  {myAssignment.attendanceStatus === 'CONFIRMED'
+                    ? 'Presença confirmada'
+                    : 'Confirmar presença'}
+                </span>
+              </button>
+            </>
+          ) : isProgrammingRole ? (
             <button
               type="button"
-              onClick={() =>
-                onUpdateAttendance(
-                  myAssignment.id,
-                  myAssignment.attendanceStatus === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
-                )
-              }
-              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-white/12 px-5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/5"
+              onClick={() => onNavigateTab('programacao')}
+              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
             >
-              <CheckCircle2 className="h-4 w-4" />
-              <span>
-                {myAssignment.attendanceStatus === 'CONFIRMED'
-                  ? 'Presença confirmada'
-                  : 'Confirmar presença'}
-              </span>
+              <span>Importar roteiro e enviar mídias</span>
+              <ArrowRight className="h-4 w-4" />
             </button>
-          </div>
-        ) : (
-          <div className="mt-5">
+          ) : isMusicRole ? (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('musicas')}
+              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
+            >
+              <span>Completar letras das músicas</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
             <button
               type="button"
               onClick={() => onNavigateTab('meditacao')}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0082E0]"
+              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0]"
             >
-              <span>Registrar meu MDO e Versículos</span>
+              <span>Abrir meu controle de meditação</span>
               <ArrowRight className="h-4 w-4" />
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
-      {/* Clean ruled summary list — minimal, scannable, mobile-native */}
+      {/* Fluxo da semana: Programação + Música -> Projeção */}
       <section>
-        <h2 className="text-base font-semibold text-white">Resumo do culto</h2>
-        <div className="mt-3 divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
+        <h2 className="text-sm font-semibold text-zinc-300">
+          Fluxo da semana (dos ministérios para a Projeção)
+        </h2>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <button
             type="button"
-            onClick={() => onNavigateTab('escalas')}
-            className="flex min-h-[56px] w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+            onClick={() => onNavigateTab('programacao')}
+            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
           >
-            <div>
-              <div className="text-sm font-medium text-white">Escala da Mesa</div>
-              <div className="text-sm text-zinc-400">
-                {confirmedCount} de 5 confirmados · {servingCount} servindo agora
-              </div>
+            <span className="text-xs text-zinc-400">1. Programação {team.name}</span>
+            <div className="mt-1 text-base font-semibold text-white">
+              {state.runItems.length} momentos · {state.mediaAssets.length} mídias
             </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
+              <span>Importar roteiro e mídias</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigateTab('musicas')}
-            className="flex min-h-[56px] w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
           >
-            <div>
-              <div className="text-sm font-medium text-white">Músicas da Semana</div>
-              <div className="text-sm text-zinc-400">
-                {state.songs.length} importadas · {approvedSongs} aprovadas para o Holyrics
-              </div>
+            <span className="text-xs text-zinc-400">2. Ministério de Música</span>
+            <div className="mt-1 text-base font-semibold text-white">
+              {songsWithLyrics} de {state.songs.length} letras prontas
             </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('programacao')}
-            className="flex min-h-[56px] w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
-          >
-            <div>
-              <div className="text-sm font-medium text-white">
-                Programação {team.name} e Mídias
-              </div>
-              <div className="text-sm text-zinc-400">
-                {state.runItems.length} blocos no roteiro · {state.mediaAssets.length} arquivos enviados
-              </div>
-            </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('meditacao')}
-            className="flex min-h-[56px] w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
-          >
-            <div>
-              <div className="text-sm font-medium text-white">Meu Controle de Meditação</div>
-              <div className="text-sm text-zinc-400">
-                MDO: {mdoDone}/6 dias na semana · Versículo de sábado:{' '}
-                {verseDone ? 'registrado' : 'pendente'}
-              </div>
-            </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
+              <span>Ver músicas do roteiro</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigateTab('culto')}
-            className="flex min-h-[56px] w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+            className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-left transition-colors hover:border-white/20"
           >
-            <div>
-              <div className="text-sm font-medium text-white">Culto e Pacote Holyrics</div>
-              <div className="text-sm text-zinc-400">
-                Painel ao vivo da mesa e download da pasta compactada (.zip)
-              </div>
+            <span className="text-xs text-zinc-400">3. Projeção (Culto)</span>
+            <div className="mt-1 text-base font-semibold text-white">
+              Tudo reunido para o Holyrics
             </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#0095FF]">
+              <span>Abrir painel do culto</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </span>
           </button>
         </div>
+
+        <p className="mt-4 text-xs text-zinc-500">
+          Seu MDO desta semana: {mdoDone}/6 dias preenchidos.
+        </p>
       </section>
     </div>
   );

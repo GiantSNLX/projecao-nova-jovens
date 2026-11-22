@@ -6,7 +6,7 @@ import type {
   ServiceState,
   StageScreen,
 } from '../types/portal';
-import { TEAM_LABELS } from '../data/initialState';
+import { TEAM_LABELS, TRIGGER_LABELS } from '../data/initialState';
 
 const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'];
 const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.gif'];
@@ -88,7 +88,6 @@ export function formatLyricsForHolyrics(
       lyricLines = lines.slice(1);
     }
 
-    // Break into Holyrics-friendly 2 to 4 line widescreen slides
     if (lyricLines.length <= 4) {
       formattedBlocks.push(label ? `${label}\n${lyricLines.join('\n')}` : lyricLines.join('\n'));
     } else {
@@ -124,7 +123,7 @@ export function validateMediaForHolyrics(params: {
       category: null,
       status: 'REJECTED',
       messages: [
-        `Formato "${ext || 'sem extensão'}" não é aceito pelo Holyrics. Consulte a guia de especificações aceitas.`,
+        `Formato "${ext || 'sem extensão'}" não é aceito pelo Holyrics.`,
       ],
     };
   }
@@ -135,7 +134,7 @@ export function validateMediaForHolyrics(params: {
   if (ext === '.ppt' || ext === '.pptx') {
     status = 'WARNING';
     messages.push(
-      'PowerPoint (.ppt/.pptx) no Holyrics só funciona no Windows com PowerPoint instalado na mesa. Recomendado converter para .pdf ou .png 16:9.',
+      'PPT/PPTX exige PowerPoint instalado no Windows da mesa. Prefira PDF ou PNG 16:9.',
     );
   }
 
@@ -148,7 +147,7 @@ export function validateMediaForHolyrics(params: {
     if (!is169) {
       status = 'WARNING';
       messages.push(
-        `Proporção detectada (${params.widthPx}×${params.heightPx}) foge do padrão 16:9 dos três telões. Pode gerar barras pretas ou cortes.`,
+        `Proporção ${params.widthPx}×${params.heightPx} foge do padrão 16:9 dos três telões.`,
       );
     } else {
       messages.push(`Proporção 16:9 validada (${params.widthPx}×${params.heightPx}).`);
@@ -158,33 +157,22 @@ export function validateMediaForHolyrics(params: {
     if (centerScreen && params.widthPx < 1280) {
       status = 'WARNING';
       messages.push(
-        `Baixa resolução (${params.widthPx}×${params.heightPx}) para o Telão Central (${centerScreen.widthPx}×${centerScreen.heightPx}).`,
-      );
-    } else if (centerScreen && params.widthPx === centerScreen.widthPx && params.heightPx === centerScreen.heightPx) {
-      messages.push(
-        `Resolução nativa exata do Telão Central (${centerScreen.widthPx}×${centerScreen.heightPx}).`,
+        `Resolução baixa (${params.widthPx}×${params.heightPx}) para o Telão Central (${centerScreen.widthPx}×${centerScreen.heightPx}).`,
       );
     }
   } else if (category === 'AUDIO') {
-    messages.push(`Áudio ${ext} compatível com o player integrado do Holyrics.`);
+    messages.push(`Áudio ${ext} compatível com o player do Holyrics.`);
   } else if (category === 'DOCUMENT' && ext === '.pdf') {
-    messages.push('Documento PDF compatível com importação direta no Holyrics.');
+    messages.push('PDF aceito para importação direta no Holyrics.');
   }
 
   const sizeMb = params.fileSizeBytes / (1024 * 1024);
   if (category === 'VIDEO' && sizeMb > 450) {
     status = 'WARNING';
-    messages.push(
-      `Vídeo com ${sizeMb.toFixed(0)} MB pode exigir hardware mais forte na mesa do Holyrics.`,
-    );
+    messages.push(`Vídeo pesado (${sizeMb.toFixed(0)} MB) — testar fluidez na mesa.`);
   }
 
-  return {
-    category,
-    status,
-    aspectRatio,
-    messages,
-  };
+  return { category, status, aspectRatio, messages };
 }
 
 export async function readMediaMetadata(file: File): Promise<{
@@ -236,9 +224,21 @@ export async function readMediaMetadata(file: File): Promise<{
 
     return {};
   } finally {
-    // Keep URL lifetime handled separately when storing asset
     URL.revokeObjectURL(url);
   }
+}
+
+export function describeMediaTrigger(asset: MediaAsset, state: ServiceState): string {
+  if (asset.displayTrigger === 'ON_REQUEST') {
+    return asset.requestedBy
+      ? `Quando solicitado por: ${asset.requestedBy}`
+      : 'Quando solicitado';
+  }
+  if (asset.displayTrigger === 'RUN_ITEM') {
+    const item = state.runItems.find((r) => r.id === asset.runItemId);
+    return item ? `${item.plannedTime} – ${item.title}` : 'No momento do roteiro';
+  }
+  return TRIGGER_LABELS[asset.displayTrigger];
 }
 
 export function buildHolyricsPackageJson(state: ServiceState) {
@@ -251,7 +251,6 @@ export function buildHolyricsPackageJson(state: ServiceState) {
       date: state.serviceDate,
       startsAt: state.startsAtTime,
       programmingTeam: state.programmingTeam,
-      status: state.status,
     },
     screens: state.screens,
     runOrder: state.runItems
@@ -261,30 +260,34 @@ export function buildHolyricsPackageJson(state: ServiceState) {
         order: item.orderIndex,
         time: item.plannedTime,
         durationMinutes: item.durationMinutes,
-        type: item.itemType,
         title: item.title,
-        responsible: item.responsibleName,
-        notes: item.description,
+        songCode: item.songCode,
         mediaFiles: state.mediaAssets
-          .filter((m) => m.runItemId === item.id)
+          .filter((m) => m.displayTrigger === 'RUN_ITEM' && m.runItemId === item.id)
           .map((m) => ({
             filename: m.normalizedFilename,
+            note: m.note,
             targetScreen: m.targetScreen,
-            category: m.category,
-            validationStatus: m.validationStatus,
           })),
+      })),
+    onDemandMedia: state.mediaAssets
+      .filter((m) => m.displayTrigger !== 'RUN_ITEM')
+      .map((m) => ({
+        filename: m.normalizedFilename,
+        whenToDisplay: describeMediaTrigger(m, state),
+        note: m.note,
+        targetScreen: m.targetScreen,
       })),
     songs: state.songs
       .slice()
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((s) => ({
+        code: s.songCode,
         order: s.orderIndex,
         title: s.title,
         artist: s.artist,
         key: s.key,
-        bpm: s.bpm,
-        approved: s.approved,
-        txtFilename: `${String(s.orderIndex).padStart(2, '0')}_${sanitizeSlug(s.title)}.txt`,
+        txtFilename: `${s.songCode ? `${s.songCode}_` : `${String(s.orderIndex).padStart(2, '0')}_`}${sanitizeSlug(s.title)}.txt`,
       })),
   };
 }
@@ -304,80 +307,98 @@ export async function generateAndDownloadHolyricsZip(
   const sortedSongs = state.songs.slice().sort((a, b) => a.orderIndex - b.orderIndex);
 
   const roteiroTxt = [
-    `========================================================`,
-    `PORTAL PROJEÇÃO NOVA JOVENS 2 — ROTEIRO PARA HOLYRICS`,
+    `PROJEÇÃO NOVA JOVENS 2 — ROTEIRO PARA HOLYRICS`,
     `Culto: ${state.title} | Data: ${state.serviceDate} (${state.startsAtTime})`,
-    `Programação: ${teamInfo.name} (${teamInfo.subtitle})`,
+    `Programação: ${teamInfo.name}`,
     `Telões: Central 3840x2160 (16:9) | Laterais 3200x1800 (16:9)`,
     `========================================================`,
     '',
     ...sortedRun.map(
       (item) =>
-        `${String(item.orderIndex).padStart(2, '0')}. [${item.plannedTime} | ${item.durationMinutes}min] ${item.title}\n` +
-        `    Responsável: ${item.responsibleName} | Tipo: ${item.itemType}\n` +
-        `    Detalhes: ${item.description}` +
-        (item.captainNotes ? `\n    Nota da Mesa: ${item.captainNotes}` : ''),
+        `${item.plannedTime} – ${item.title} (${item.durationMinutes}min)\n` +
+        `  Responsável: ${item.responsibleName}`,
     ),
-  ].join('\n\n');
+    '',
+    `========================================================`,
+    `NOTAS E GATILHOS DAS MÍDIAS:`,
+    ...state.mediaAssets.map(
+      (m) =>
+        `- ${m.normalizedFilename}\n` +
+        `  Quando exibir: ${describeMediaTrigger(m, state)}\n` +
+        `  Telas: ${m.targetScreen}\n` +
+        `  Nota: ${m.note || 'Sem nota adicional.'}`,
+    ),
+  ].join('\n');
 
   const pkgJson = buildHolyricsPackageJson(state);
 
-  const holyricsScript = `// Script auxiliar para referência com Holyrics API Server (https://github.com/holyrics/API-Server)
-// Culto: ${state.title} (${state.serviceDate}) - ${teamInfo.name}
-const CULTO_DATA = ${JSON.stringify(pkgJson, null, 2)};
-
-// Exemplo de integração: percorra CULTO_DATA.songs e CULTO_DATA.runOrder
-// para montar a playlist via endpoints locais do API Server do Holyrics.
-console.log("Roteiro carregado:", CULTO_DATA.service.title, CULTO_DATA.runOrder.length, "blocos");
-`;
-
   importFolder?.file('roteiro_culto.txt', roteiroTxt);
   importFolder?.file('culto_holyrics.json', JSON.stringify(pkgJson, null, 2));
-  importFolder?.file('script_holyrics_import.js', holyricsScript);
 
   const allLyricsCombined: string[] = [];
   for (const song of sortedSongs) {
-    const fileName = `${String(song.orderIndex).padStart(2, '0')}_${sanitizeSlug(song.title)}.txt`;
-    lyricsFolder?.file(fileName, song.holyricsTxt);
-    allLyricsCombined.push(song.holyricsTxt);
+    const prefix = song.songCode ? `${song.songCode}_` : `${String(song.orderIndex).padStart(2, '0')}_`;
+    const fileName = `${prefix}${sanitizeSlug(song.title)}.txt`;
+    const body =
+      song.holyricsTxt ||
+      formatLyricsForHolyrics(
+        song.rawLyrics || '[Verso 1]\nLetra não informada',
+        song.title,
+        song.artist,
+        song.key,
+        song.bpm,
+      );
+    lyricsFolder?.file(fileName, body);
+    allLyricsCombined.push(body);
   }
-  lyricsFolder?.file('todas_musicas_semana.txt', allLyricsCombined.join('\n\n==============================\n\n'));
+  lyricsFolder?.file(
+    'todas_musicas_semana.txt',
+    allLyricsCombined.join('\n\n==============================\n\n'),
+  );
 
   let mediaCount = 0;
+
+  // Run-item bound media
   for (const item of sortedRun) {
-    const blockAssets = state.mediaAssets.filter((m) => m.runItemId === item.id);
-    if (blockAssets.length === 0 && !item.requiresMedia) continue;
+    const blockAssets = state.mediaAssets.filter(
+      (m) => m.displayTrigger === 'RUN_ITEM' && m.runItemId === item.id,
+    );
+    if (blockAssets.length === 0) continue;
 
-    const folderName = `${String(item.orderIndex).padStart(2, '0')}_${sanitizeSlug(item.title).slice(0, 32)}`;
+    const folderName = `${String(item.orderIndex).padStart(2, '0')}_${sanitizeSlug(item.title).slice(0, 28)}`;
     const blockFolder = mediaRootFolder?.folder(folderName);
-
-    if (blockAssets.length === 0) {
-      blockFolder?.file(
-        'LEIA_ME.txt',
-        `Bloco "${item.title}" marcado como exige mídia, mas nenhum arquivo foi anexado ainda.`,
-      );
-      continue;
-    }
 
     for (const asset of blockAssets) {
       const realFile = uploadedFilesMap.get(asset.id);
       if (realFile) {
         blockFolder?.file(asset.normalizedFilename, realFile);
       } else {
-        // Demo placeholder metadata file when file was pre-seeded without local binary
         blockFolder?.file(
-          `${asset.normalizedFilename}.info.txt`,
-          [
-            `Arquivo de referência (pré-cadastrado na demonstração): ${asset.originalFilename}`,
-            `Destino de tela: ${asset.targetScreen}`,
-            `Dimensões: ${asset.widthPx ?? '?'}x${asset.heightPx ?? '?'} (${asset.aspectRatio ?? 'N/A'})`,
-            `Status Holyrics: ${asset.validationStatus}`,
-            `Observação: Suba o arquivo real na aba Programação para empacotar o binário aqui.`,
-          ].join('\n'),
+          `${asset.normalizedFilename}.nota.txt`,
+          `Arquivo: ${asset.originalFilename}\nQuando exibir: ${describeMediaTrigger(asset, state)}\nNota: ${asset.note}`,
         );
       }
       mediaCount += 1;
     }
+  }
+
+  // On-demand media (Quando solicitado, Arranque, Esquete, Brincadeira)
+  const onDemandAssets = state.mediaAssets.filter((m) => m.displayTrigger !== 'RUN_ITEM');
+  if (onDemandAssets.length > 0) {
+    const onDemandFolder = mediaRootFolder?.folder('00_Momentos_Especiais_e_Sob_Demanda');
+    const notesSummary: string[] = [];
+
+    for (const asset of onDemandAssets) {
+      const realFile = uploadedFilesMap.get(asset.id);
+      if (realFile) {
+        onDemandFolder?.file(asset.normalizedFilename, realFile);
+      }
+      notesSummary.push(
+        `Arquivo: ${asset.normalizedFilename}\nQuando exibir: ${describeMediaTrigger(asset, state)}\nTelas: ${asset.targetScreen}\nNota: ${asset.note || '—'}\n`,
+      );
+      mediaCount += 1;
+    }
+    onDemandFolder?.file('LEIA_ME_GATILHOS.txt', notesSummary.join('\n---\n'));
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -394,7 +415,7 @@ console.log("Roteiro carregado:", CULTO_DATA.service.title, CULTO_DATA.runOrder.
 
   return {
     filename: zipFilename,
-    fileCount: sortedSongs.length + mediaCount + 4,
+    fileCount: sortedSongs.length + mediaCount + 2,
   };
 }
 

@@ -6,12 +6,14 @@ import {
 import type {
   AttendanceStatus,
   AuditLogEntry,
+  DeskAssignment,
   LiveItemStatus,
   MdoEntry,
   MediaAsset,
   MemberUser,
   ProgrammingTeam,
   RunItem,
+  SaturdaySchedule,
   SaturdayVerseRecord,
   ScreenCode,
   ServiceSong,
@@ -29,7 +31,7 @@ import { DevotionalTab } from './components/DevotionalTab';
 import { EscalasTab } from './components/EscalasTab';
 import { ConfiguracoesTab } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v2';
+const STORAGE_KEY = 'projecao-nova-jovens-v4';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
@@ -37,7 +39,9 @@ function loadInitialState(): ServiceState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return INITIAL_SERVICE_STATE;
     const parsed = JSON.parse(raw) as ServiceState;
-    if (!parsed || !parsed.screens || !parsed.assignments) return INITIAL_SERVICE_STATE;
+    if (!parsed || !parsed.screens || !parsed.assignments || !parsed.schedules) {
+      return INITIAL_SERVICE_STATE;
+    }
     return parsed;
   } catch {
     return INITIAL_SERVICE_STATE;
@@ -52,6 +56,15 @@ function loadSessionUser(): MemberUser | null {
   } catch {
     return null;
   }
+}
+
+function addSevenDays(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 7));
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }
 
 export function App() {
@@ -131,12 +144,31 @@ export function App() {
     setState(INITIAL_SERVICE_STATE);
   };
 
-  const handleUpdateAttendance = (assignmentId: string, status: AttendanceStatus) => {
+  const updateScheduleAssignments = (
+    prev: ServiceState,
+    scheduleDate: string,
+    updater: (asgs: DeskAssignment[]) => DeskAssignment[],
+  ): { schedules: SaturdaySchedule[]; assignments: DeskAssignment[] } => {
+    const schedules = prev.schedules.map((s) =>
+      s.date === scheduleDate ? { ...s, assignments: updater(s.assignments) } : s,
+    );
+    const current = schedules.find((s) => s.date === prev.serviceDate);
+    return {
+      schedules,
+      assignments: current ? current.assignments : prev.assignments,
+    };
+  };
+
+  const handleUpdateAttendance = (
+    scheduleDate: string,
+    assignmentId: string,
+    status: AttendanceStatus,
+  ) => {
     setState((prev) => {
-      const target = prev.assignments.find((a) => a.id === assignmentId);
-      return {
-        ...prev,
-        assignments: prev.assignments.map((a) =>
+      const targetSched = prev.schedules.find((s) => s.date === scheduleDate);
+      const target = targetSched?.assignments.find((a) => a.id === assignmentId);
+      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+        list.map((a) =>
           a.id === assignmentId
             ? {
                 ...a,
@@ -145,10 +177,14 @@ export function App() {
               }
             : a,
         ),
+      );
+      return {
+        ...prev,
+        ...updated,
         auditLogs: [
           makeAudit(
             'Presença',
-            `atualizou presença em ${target?.position ?? ''} para ${status === 'CONFIRMED' ? 'Confirmado' : status === 'DECLINED' ? 'Ausente' : 'Pendente'}.`,
+            `confirmou ${status === 'CONFIRMED' ? 'presença' : 'ausência'} em ${target?.position ?? ''} (${scheduleDate}).`,
           ),
           ...prev.auditLogs,
         ],
@@ -156,13 +192,13 @@ export function App() {
     });
   };
 
-  const handleToggleServingOnDesk = (assignmentId: string) => {
+  const handleToggleServingOnDesk = (scheduleDate: string, assignmentId: string) => {
     setState((prev) => {
-      const target = prev.assignments.find((a) => a.id === assignmentId);
+      const targetSched = prev.schedules.find((s) => s.date === scheduleDate);
+      const target = targetSched?.assignments.find((a) => a.id === assignmentId);
       const nextServing = !target?.servingOnDesk;
-      return {
-        ...prev,
-        assignments: prev.assignments.map((a) =>
+      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+        list.map((a) =>
           a.id === assignmentId
             ? {
                 ...a,
@@ -172,6 +208,10 @@ export function App() {
               }
             : a,
         ),
+      );
+      return {
+        ...prev,
+        ...updated,
         auditLogs: [
           makeAudit(
             'Mesa',
@@ -183,37 +223,118 @@ export function App() {
     });
   };
 
-  const handleChangeAssignmentMember = (assignmentId: string, userId: string) => {
+  const handleChangeAssignmentMember = (
+    scheduleDate: string,
+    assignmentId: string,
+    userId: string,
+  ) => {
     const member = INITIAL_MEMBERS.find((m) => m.id === userId);
+    setState((prev) => {
+      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+        list.map((a) =>
+          a.id === assignmentId
+            ? {
+                ...a,
+                userId,
+                attendanceStatus: 'PENDING',
+                servingOnDesk: false,
+                deskCheckinAt: undefined,
+              }
+            : a,
+        ),
+      );
+      return {
+        ...prev,
+        ...updated,
+        auditLogs: [
+          makeAudit('Escala', `escalou ${member?.name ?? userId} para ${scheduleDate}.`),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  const handleChangeScheduleTeam = (scheduleDate: string, team: ProgrammingTeam) => {
     setState((prev) => ({
       ...prev,
-      assignments: prev.assignments.map((a) =>
-        a.id === assignmentId
-          ? {
-              ...a,
-              userId,
-              attendanceStatus: 'PENDING',
-              servingOnDesk: false,
-              deskCheckinAt: undefined,
-            }
-          : a,
+      programmingTeam: scheduleDate === prev.serviceDate ? team : prev.programmingTeam,
+      schedules: prev.schedules.map((s) =>
+        s.date === scheduleDate ? { ...s, programmingTeam: team } : s,
       ),
       auditLogs: [
-        makeAudit('Escala', `escalou ${member?.name ?? userId}.`),
+        makeAudit('Programação', `definiu equipe ${team} para ${scheduleDate}.`),
         ...prev.auditLogs,
       ],
     }));
   };
 
+  const handleAddNextSaturday = () => {
+    setState((prev) => {
+      const sorted = prev.schedules.slice().sort((a, b) => a.date.localeCompare(b.date));
+      const last = sorted[sorted.length - 1];
+      const nextDate = addSevenDays(last?.date ?? prev.serviceDate);
+      const teamCycle: ProgrammingTeam[] = ['ALPHA', 'BRAVO', 'CHARLIE'];
+      const nextTeam =
+        teamCycle[(teamCycle.indexOf(last?.programmingTeam ?? 'ALPHA') + 1) % 3];
+
+      const newSched: SaturdaySchedule = {
+        date: nextDate,
+        programmingTeam: nextTeam,
+        assignments: [
+          { id: `s-${nextDate}-1`, position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-2`, position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-3`, position: 'RETORNO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-4`, position: 'CORTE', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-5`, position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+        ],
+      };
+
+      return {
+        ...prev,
+        schedules: [...prev.schedules, newSched],
+        auditLogs: [
+          makeAudit('Escala', `criou escala do sábado ${nextDate}.`),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
   const handleChangeProgrammingTeam = (team: ProgrammingTeam) => {
-    setState((prev) => ({
-      ...prev,
-      programmingTeam: team,
-      auditLogs: [
-        makeAudit('Programação', `definiu equipe da semana como ${team}.`),
-        ...prev.auditLogs,
-      ],
-    }));
+    handleChangeScheduleTeam(state.serviceDate, team);
+  };
+
+  const handleReplaceScheduleFromImport = (params: {
+    runItems: RunItem[];
+    detectedSongs: ServiceSong[];
+    detectedDate?: string;
+    sourceLabel: string;
+  }) => {
+    setState((prev) => {
+      const mergedSongs: ServiceSong[] = params.detectedSongs.map((ds) => {
+        const existing = prev.songs.find(
+          (es) =>
+            (es.songCode && es.songCode === ds.songCode) ||
+            es.title.toLowerCase() === ds.title.toLowerCase(),
+        );
+        return existing ? { ...existing, songCode: ds.songCode, orderIndex: ds.orderIndex } : ds;
+      });
+
+      return {
+        ...prev,
+        serviceDate: params.detectedDate || prev.serviceDate,
+        startsAtTime: params.runItems[0]?.plannedTime || prev.startsAtTime,
+        runItems: params.runItems,
+        songs: mergedSongs.length > 0 ? mergedSongs : prev.songs,
+        auditLogs: [
+          makeAudit(
+            'Roteiro',
+            `importou ${params.runItems.length} momentos via ${params.sourceLabel}.`,
+          ),
+          ...prev.auditLogs,
+        ],
+      };
+    });
   };
 
   const handleUpdateLiveItem = (itemId: string, status: LiveItemStatus) => {
@@ -259,19 +380,20 @@ export function App() {
     }));
   };
 
-  const handleAddSong = (songData: Omit<ServiceSong, 'id' | 'orderIndex'>) => {
-    setState((prev) => ({
-      ...prev,
-      songs: [
-        ...prev.songs,
-        {
-          ...songData,
-          id: `sng-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-          orderIndex: prev.songs.length + 1,
-        },
-      ],
-      auditLogs: [makeAudit('Música', `adicionou "${songData.title}".`), ...prev.auditLogs],
-    }));
+  const handleSaveOrAddSong = (song: ServiceSong) => {
+    setState((prev) => {
+      const exists = prev.songs.some((s) => s.id === song.id);
+      return {
+        ...prev,
+        songs: exists
+          ? prev.songs.map((s) => (s.id === song.id ? song : s))
+          : [...prev.songs, song],
+        auditLogs: [
+          makeAudit('Música', `salvou a letra de "${song.title}".`),
+          ...prev.auditLogs,
+        ],
+      };
+    });
   };
 
   const handleToggleApproveSong = (songId: string) => {
@@ -287,40 +409,6 @@ export function App() {
       songs: prev.songs
         .filter((s) => s.id !== songId)
         .map((s, idx) => ({ ...s, orderIndex: idx + 1 })),
-    }));
-  };
-
-  const handleAddRunItem = (item: Omit<RunItem, 'id' | 'orderIndex' | 'liveStatus'>) => {
-    setState((prev) => ({
-      ...prev,
-      runItems: [
-        ...prev.runItems,
-        {
-          ...item,
-          id: `run-${Date.now()}`,
-          orderIndex: prev.runItems.length + 1,
-          liveStatus: 'PENDING',
-        },
-      ],
-      auditLogs: [makeAudit('Roteiro', `adicionou "${item.title}".`), ...prev.auditLogs],
-    }));
-  };
-
-  const handleImportBatchRunItems = (
-    items: Omit<RunItem, 'id' | 'orderIndex' | 'liveStatus'>[],
-  ) => {
-    setState((prev) => ({
-      ...prev,
-      runItems: [
-        ...prev.runItems,
-        ...items.map((item, idx) => ({
-          ...item,
-          id: `run-${Date.now()}-${idx}`,
-          orderIndex: prev.runItems.length + idx + 1,
-          liveStatus: 'PENDING' as const,
-        })),
-      ],
-      auditLogs: [makeAudit('Roteiro', `importou ${items.length} blocos.`), ...prev.auditLogs],
     }));
   };
 
@@ -436,8 +524,8 @@ export function App() {
           <InicioTab
             state={state}
             activeUser={activeUser}
-            onUpdateAttendance={handleUpdateAttendance}
-            onToggleServingOnDesk={handleToggleServingOnDesk}
+            onUpdateAttendance={(id, status) => handleUpdateAttendance(state.serviceDate, id, status)}
+            onToggleServingOnDesk={(id) => handleToggleServingOnDesk(state.serviceDate, id)}
             onNavigateTab={setActiveTab}
           />
         )}
@@ -446,10 +534,10 @@ export function App() {
           <MusicTab
             songs={state.songs}
             canEditMusic={canEditMusic}
-            canApprove={isLeader}
+            isLeader={isLeader}
             activeUserName={activeUser.name}
             isFrozen={state.isFrozen}
-            onAddSong={handleAddSong}
+            onSaveOrAddSong={handleSaveOrAddSong}
             onToggleApproveSong={handleToggleApproveSong}
             onRemoveSong={handleRemoveSong}
           />
@@ -459,11 +547,10 @@ export function App() {
           <ProgrammingTab
             state={state}
             canEditProgramming={canEditProgramming}
-            canApprove={isLeader}
+            isLeader={isLeader}
             activeUserName={activeUser.name}
             onChangeTeam={handleChangeProgrammingTeam}
-            onAddRunItem={handleAddRunItem}
-            onImportBatchRunItems={handleImportBatchRunItems}
+            onReplaceScheduleFromImport={handleReplaceScheduleFromImport}
             onAddMediaAsset={handleAddMediaAsset}
             onToggleApproveMedia={handleToggleApproveMedia}
             onRemoveMediaAsset={handleRemoveMediaAsset}
@@ -505,6 +592,8 @@ export function App() {
             onUpdateAttendance={handleUpdateAttendance}
             onToggleServingOnDesk={handleToggleServingOnDesk}
             onChangeAssignmentMember={handleChangeAssignmentMember}
+            onChangeScheduleTeam={handleChangeScheduleTeam}
+            onAddNextSaturday={handleAddNextSaturday}
           />
         )}
 
@@ -515,8 +604,6 @@ export function App() {
             onChangeTeam={handleChangeProgrammingTeam}
             onUpdateScreen={handleUpdateScreen}
             onToggleFreeze={handleToggleFreeze}
-            onToggleApproveSong={handleToggleApproveSong}
-            onToggleApproveMedia={handleToggleApproveMedia}
             onResetDemo={handleResetDemo}
           />
         )}

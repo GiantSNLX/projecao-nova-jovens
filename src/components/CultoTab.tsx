@@ -9,7 +9,10 @@ import {
 } from 'lucide-react';
 import type { LiveItemStatus, MemberUser, ServiceState } from '../types/portal';
 import { DESK_POSITION_INFO } from '../data/initialState';
-import { generateAndDownloadHolyricsZip, sanitizeSlug } from '../utils/holyrics';
+import {
+  describeMediaTrigger,
+  generateAndDownloadHolyricsZip,
+} from '../utils/holyrics';
 
 interface CultoTabProps {
   state: ServiceState;
@@ -48,7 +51,7 @@ export function CultoTab({
   }, [state.status]);
 
   const sortedItems = state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex);
-  const sortedSongs = state.songs.slice().sort((a, b) => a.orderIndex - b.orderIndex);
+  const onDemandMedia = state.mediaAssets.filter((m) => m.displayTrigger !== 'RUN_ITEM');
 
   const hh = Math.floor(elapsedSeconds / 3600);
   const mm = Math.floor((elapsedSeconds % 3600) / 60);
@@ -71,11 +74,9 @@ export function CultoTab({
       {/* Header + Live Toggle */}
       <section className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Controle do Culto
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Culto</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Acompanhe o roteiro em tempo real na mesa e baixe o pacote completo para o Holyrics.
+            Tudo que veio da Programação e da Música reunido para a mesa operar e baixar no Holyrics.
           </p>
         </div>
 
@@ -103,9 +104,9 @@ export function CultoTab({
         </div>
       </section>
 
-      {/* Equipe na mesa agora */}
+      {/* Equipe na mesa */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-300">Quem está na mesa</h2>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-300">Quem está na mesa agora</h2>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
           {state.assignments.map((asg) => {
             const member = members.find((m) => m.id === asg.userId);
@@ -130,34 +131,65 @@ export function CultoTab({
         </div>
       </section>
 
-      {/* Roteiro ao vivo + Recado da mesa */}
       <div className="grid gap-6 lg:grid-cols-12">
+        {/* Roteiro completo recebido da Programação + Música */}
         <section className="lg:col-span-8">
-          <h2 className="mb-3 text-base font-semibold text-white">Momentos do culto</h2>
+          <h2 className="mb-3 text-base font-semibold text-white">
+            Roteiro do culto ({sortedItems.length} momentos)
+          </h2>
           <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
             {sortedItems.map((item) => {
               const isCurrent = item.liveStatus === 'CURRENT';
               const isDone = item.liveStatus === 'DONE';
+              const itemMedia = state.mediaAssets.filter(
+                (m) => m.displayTrigger === 'RUN_ITEM' && m.runItemId === item.id,
+              );
+              const linkedSong = item.songCode
+                ? state.songs.find((s) => s.songCode === item.songCode)
+                : undefined;
 
               return (
                 <div
                   key={item.id}
-                  className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ${
-                    isCurrent ? 'bg-[#0095FF]/10' : isDone ? 'opacity-65' : ''
+                  className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between ${
+                    isCurrent ? 'bg-[#0095FF]/10' : isDone ? 'opacity-60' : ''
                   }`}
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-mono-tech text-zinc-400">
-                        {String(item.orderIndex).padStart(2, '0')} · {item.plannedTime} ({item.durationMinutes}m)
+                      <span className="font-mono-tech font-medium text-zinc-300">
+                        {item.plannedTime}
                       </span>
-                      <span className="text-zinc-400">· {item.responsibleName}</span>
+                      {item.durationMinutes > 0 && (
+                        <span className="font-mono-tech text-zinc-500">
+                          ({item.durationMinutes}min)
+                        </span>
+                      )}
                       {isCurrent && (
                         <span className="font-semibold text-[#0095FF]">No ar agora</span>
                       )}
                     </div>
-                    <h3 className="mt-1 text-base font-medium text-white">{item.title}</h3>
-                    <p className="text-sm text-zinc-400">{item.description}</p>
+
+                    <h3 className="text-base font-medium text-white">{item.title}</h3>
+
+                    {linkedSong && (
+                      <p className="text-xs text-emerald-400">
+                        {linkedSong.rawLyrics.trim()
+                          ? `Letra pronta (${linkedSong.title})`
+                          : `Aguardando letra em Músicas (${linkedSong.songCode})`}
+                      </p>
+                    )}
+
+                    {itemMedia.map((m) => (
+                      <div
+                        key={m.id}
+                        className="mt-1.5 rounded-lg border border-white/10 bg-[#0B0C0F] px-3 py-2 text-xs"
+                      >
+                        <span className="font-medium text-white">{m.normalizedFilename}</span>
+                        <span className="ml-2 text-zinc-400">({m.targetScreen})</span>
+                        {m.note && <p className="mt-0.5 text-zinc-300">Nota: {m.note}</p>}
+                      </div>
+                    ))}
                   </div>
 
                   {canOperateDesk && (
@@ -200,36 +232,42 @@ export function CultoTab({
           </div>
         </section>
 
+        {/* Lateral direita: Mídias de Gatilho Rápido + Baixar Holyrics + Aviso */}
         <section className="space-y-6 lg:col-span-4">
-          {/* Recado rápido */}
+          {/* Mídias sob demanda (Arranque, Esquete, Brincadeira, Quando solicitado) */}
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
-            <h2 className="text-base font-semibold text-white">Aviso da mesa</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Recado visível para todos os operadores.
+            <h2 className="text-base font-semibold text-white">
+              Mídias de gatilho rápido ({onDemandMedia.length})
+            </h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              Arquivos marcados para Arranque, Esquete, Brincadeira ou Quando solicitado.
             </p>
-            <textarea
-              rows={4}
-              value={notesDraft}
-              disabled={!canOperateDesk}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              className="mt-3 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white focus:border-[#0095FF] focus:outline-none disabled:opacity-60"
-            />
-            {canOperateDesk && (
-              <button
-                type="button"
-                onClick={() => onUpdateLiveNotes(notesDraft)}
-                className="mt-3 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-semibold text-white hover:bg-white/5"
-              >
-                Salvar aviso
-              </button>
+
+            {onDemandMedia.length === 0 ? (
+              <p className="mt-3 text-sm text-zinc-500">Nenhuma mídia avulsa enviada.</p>
+            ) : (
+              <div className="mt-3 space-y-2.5">
+                {onDemandMedia.map((m) => (
+                  <div
+                    key={m.id}
+                    className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3 text-xs"
+                  >
+                    <div className="font-semibold text-[#F5C41E]">
+                      {describeMediaTrigger(m, state)}
+                    </div>
+                    <div className="mt-1 font-medium text-white">{m.normalizedFilename}</div>
+                    {m.note && <p className="mt-1 text-zinc-300">Nota: {m.note}</p>}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {/* Baixar pacote Holyrics (.zip) */}
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
-            <h2 className="text-base font-semibold text-white">Exportar para o Holyrics</h2>
+            <h2 className="text-base font-semibold text-white">Baixar tudo para o Holyrics</h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Gera uma pasta compactada (.zip) com roteiro, letras em .txt ({sortedSongs.length}) e mídias separadas na ordem do culto.
+              Pasta compactada (.zip) com roteiro, notas, letras em .txt e mídias separadas por momento.
             </p>
 
             <button
@@ -239,7 +277,7 @@ export function CultoTab({
               className="mt-4 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              <span>{isExporting ? 'Gerando .ZIP...' : 'Baixar Culto (.ZIP) Holyrics'}</span>
+              <span>{isExporting ? 'Gerando .ZIP...' : 'Baixar Pacote .ZIP Holyrics'}</span>
             </button>
 
             {exportedFilename && (
@@ -247,16 +285,27 @@ export function CultoTab({
                 Pacote baixado: {exportedFilename}
               </p>
             )}
+          </div>
 
-            <pre className="font-mono-tech mt-4 overflow-x-auto rounded-lg border border-white/8 bg-[#0B0C0F] p-3 text-xs text-zinc-400">
-{`00_Roteiro_e_Importacao/
-01_Letras_Musicas_TXT/ (${sortedSongs.length} .txt)
-02_Midias_do_Culto/
-${sortedItems
-  .filter((r) => r.requiresMedia || state.mediaAssets.some((m) => m.runItemId === r.id))
-  .map((r) => `  ${String(r.orderIndex).padStart(2, '0')}_${sanitizeSlug(r.title).slice(0, 22)}/`)
-  .join('\n')}`}
-            </pre>
+          {/* Aviso da mesa */}
+          <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
+            <h2 className="text-base font-semibold text-white">Aviso na mesa</h2>
+            <textarea
+              rows={3}
+              value={notesDraft}
+              disabled={!canOperateDesk}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              className="mt-2.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white focus:border-[#0095FF] focus:outline-none disabled:opacity-60"
+            />
+            {canOperateDesk && (
+              <button
+                type="button"
+                onClick={() => onUpdateLiveNotes(notesDraft)}
+                className="mt-2.5 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-medium text-white hover:bg-white/5"
+              >
+                Salvar aviso
+              </button>
+            )}
           </div>
         </section>
       </div>

@@ -1,10 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle2, Lock, ShieldCheck, Unlock } from 'lucide-react';
-import type {
-  ProgrammingTeam,
-  ScreenCode,
-  ServiceState,
-} from '../types/portal';
+import { Lock, ShieldCheck, Unlock } from 'lucide-react';
+import type { ProgrammingTeam, ScreenCode, ServiceState } from '../types/portal';
 import { TEAM_LABELS } from '../data/initialState';
 
 interface ConfiguracoesTabProps {
@@ -13,8 +9,6 @@ interface ConfiguracoesTabProps {
   onChangeTeam: (team: ProgrammingTeam) => void;
   onUpdateScreen: (code: ScreenCode, widthPx: number, heightPx: number) => void;
   onToggleFreeze: (reason?: string) => void;
-  onToggleApproveSong: (songId: string) => void;
-  onToggleApproveMedia: (assetId: string) => void;
   onResetDemo: () => void;
 }
 
@@ -24,24 +18,17 @@ export function ConfiguracoesTab({
   onChangeTeam,
   onUpdateScreen,
   onToggleFreeze,
-  onToggleApproveSong,
-  onToggleApproveMedia,
   onResetDemo,
 }: ConfiguracoesTabProps) {
   const [freezeReason, setFreezeReason] = useState('');
-
-  const pendingSongs = state.songs.filter((s) => !s.approved);
-  const pendingMedia = state.mediaAssets.filter((m) => !m.approved);
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Configurações
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Configurações</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Resoluções dos telões, equipe da semana, prazo de envio e histórico de alterações.
+            Resoluções dos telões, equipe da semana, prazo de envio e histórico recente.
           </p>
         </div>
 
@@ -53,18 +40,14 @@ export function ConfiguracoesTab({
           }`}
         >
           <ShieldCheck className="h-3.5 w-3.5" />
-          <span>{isLeader ? 'Status: Liderança (edição liberada)' : 'Somente leitura'}</span>
+          <span>{isLeader ? 'Status: Liderança' : 'Somente leitura'}</span>
         </span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Equipe da semana + Trava de envios */}
         <section className="space-y-5 rounded-xl border border-white/10 bg-[#12141A] p-5">
           <div>
             <h2 className="text-base font-semibold text-white">Programação da semana</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Equipe responsável por enviar o roteiro e as mídias deste culto.
-            </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(['ALPHA', 'BRAVO', 'CHARLIE'] as ProgrammingTeam[]).map((t) => (
                 <button
@@ -88,8 +71,8 @@ export function ConfiguracoesTab({
             <h2 className="text-base font-semibold text-white">Prazo de envio</h2>
             <p className="mt-1 text-sm text-zinc-400">
               {state.isFrozen
-                ? 'Envios travados. Música e Programação não podem alterar arquivos.'
-                : `Envios abertos. Prazo padrão: ${state.cutoffLabel}.`}
+                ? 'Envios travados no momento.'
+                : `Envios abertos. Prazo: ${state.cutoffLabel}.`}
             </p>
 
             {isLeader && (
@@ -115,19 +98,15 @@ export function ConfiguracoesTab({
                   }`}
                 >
                   {state.isFrozen ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                  <span>{state.isFrozen ? 'Reabrir envios' : 'Travar envios agora'}</span>
+                  <span>{state.isFrozen ? 'Reabrir envios' : 'Travar envios'}</span>
                 </button>
               </>
             )}
           </div>
         </section>
 
-        {/* Resoluções dos 3 telões */}
         <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
           <h2 className="text-base font-semibold text-white">Resoluções dos 3 telões (16:9)</h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            Valores usados no Simulador de Palco para conferir qualidade e proporção.
-          </p>
           <div className="mt-4 space-y-3">
             {state.screens.map((scr) => (
               <div
@@ -161,64 +140,9 @@ export function ConfiguracoesTab({
         </section>
       </div>
 
-      {/* Aprovações pendentes */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-        <h2 className="text-base font-semibold text-white">
-          Aprovações pendentes ({pendingSongs.length + pendingMedia.length})
-        </h2>
-
-        {pendingSongs.length === 0 && pendingMedia.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-400">
-            Todas as músicas e mídias desta semana já estão aprovadas.
-          </p>
-        ) : (
-          <div className="mt-3 divide-y divide-white/8">
-            {pendingSongs.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-3 py-3">
-                <div>
-                  <span className="text-sm font-medium text-white">Música: {s.title}</span>
-                  <span className="ml-2 text-xs text-zinc-400">por {s.addedBy}</span>
-                </div>
-                {isLeader && (
-                  <button
-                    type="button"
-                    onClick={() => onToggleApproveSong(s.id)}
-                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-[#0095FF] px-3.5 text-xs font-semibold text-white"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Aprovar</span>
-                  </button>
-                )}
-              </div>
-            ))}
-            {pendingMedia.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-3 py-3">
-                <div>
-                  <span className="text-sm font-medium text-white">
-                    Mídia: {m.normalizedFilename}
-                  </span>
-                  <span className="ml-2 text-xs text-zinc-400">por {m.uploadedBy}</span>
-                </div>
-                {isLeader && (
-                  <button
-                    type="button"
-                    onClick={() => onToggleApproveMedia(m.id)}
-                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-[#0095FF] px-3.5 text-xs font-semibold text-white"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Aprovar</span>
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Histórico simples de alterações */}
       <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-semibold text-white">Histórico recente da equipe</h2>
+          <h2 className="text-base font-semibold text-white">Histórico recente</h2>
           {isLeader && (
             <button
               type="button"

@@ -1,5 +1,6 @@
 import type {
   DeskPosition,
+  MediaDisplayTrigger,
   MemberUser,
   ProgrammingTeam,
   Role,
@@ -34,7 +35,7 @@ export const DESK_POSITION_INFO: Record<
   CAPITAO: {
     label: 'Capitão',
     short: 'Capitão',
-    responsibility: 'Coordena a mesa, aprova o culto e acompanha a equipe.',
+    responsibility: 'Coordena a mesa, confere os arquivos e conduz o roteiro.',
   },
   PRINCIPAL: {
     label: 'Principal',
@@ -44,18 +45,26 @@ export const DESK_POSITION_INFO: Record<
   RETORNO: {
     label: 'Retorno',
     short: 'Retorno',
-    responsibility: 'Cuida do retorno de palco para louvor e pregação.',
+    responsibility: 'Controla o retorno de palco para louvor e mensagem.',
   },
   CORTE: {
     label: 'Corte',
     short: 'Corte',
-    responsibility: 'Faz os cortes de câmera e transições com a projeção.',
+    responsibility: 'Faz os cortes de câmera e transições com os telões.',
   },
   APOIO: {
     label: 'Apoio',
     short: 'Apoio',
-    responsibility: 'Dá suporte rápido para conferência de mídias e trocas na mesa.',
+    responsibility: 'Dá suporte na mesa para mídias avulsas e emergências.',
   },
+};
+
+export const TRIGGER_LABELS: Record<MediaDisplayTrigger, string> = {
+  RUN_ITEM: 'Momento do roteiro',
+  ON_REQUEST: 'Quando solicitado',
+  ARRANQUE: 'Durante o Arranque',
+  ESQUETE: 'Durante a Esquete',
+  BRINCADEIRA: 'Durante a Brincadeira',
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -82,7 +91,7 @@ export const HOLYRICS_SPECS: HolyricsSpecRule[] = [
     acceptedExtensions: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'],
     recommended: '.mp4 (H.264 + AAC)',
     resolutionRule: '1920×1080 ou 3840×2160 (Central) / 3200×1800 (Laterais) em 16:9',
-    notes: 'Reprodução pelo motor VLC do Holyrics. Evite arquivos 4K pesados demais sem necessidade.',
+    notes: 'Reprodução pelo VLC integrado ao Holyrics.',
   },
   {
     category: 'IMAGE',
@@ -90,33 +99,47 @@ export const HOLYRICS_SPECS: HolyricsSpecRule[] = [
     acceptedExtensions: ['.png', '.jpg', '.jpeg', '.bmp', '.gif'],
     recommended: '.png (com transparência) ou .jpg',
     resolutionRule: 'Central 3840×2160 px · Laterais 3200×1800 px (16:9)',
-    notes: 'Imagens verticais de celular ficam com barras pretas ou cortes nos telões.',
+    notes: 'Imagens verticais ficam com barras laterais.',
   },
   {
     category: 'AUDIO',
     title: 'Áudios e Trilhas',
     acceptedExtensions: ['.mp3', '.wav', '.aac', '.ogg', '.flac'],
     recommended: '.mp3 (320 kbps) ou .wav',
-    resolutionRule: 'Áudio estéreo com volume equilibrado',
-    notes: 'Compatível com o player interno do Holyrics.',
+    resolutionRule: 'Estéreo normalizado',
+    notes: 'Toca direto no player do Holyrics.',
   },
   {
     category: 'DOCUMENT',
-    title: 'Apresentações e Slides',
+    title: 'Apresentações',
     acceptedExtensions: ['.pdf', '.ppt', '.pptx'],
     recommended: '.pdf ou imagens .png/.jpg 16:9',
-    resolutionRule: 'Tela widescreen 16:9',
-    notes: 'PowerPoint (.ppt/.pptx) exige PowerPoint instalado no Windows da mesa. PDF ou PNG evitam fontes desconfiguradas.',
+    resolutionRule: 'Proporção 16:9',
+    notes: 'PPT/PPTX exige PowerPoint instalado no Windows da mesa. Prefira PDF ou PNG.',
   },
   {
     category: 'LYRICS',
-    title: 'Letras de Músicas',
+    title: 'Letras',
     acceptedExtensions: ['.txt'],
-    recommended: '.txt separado em blocos de 2 a 4 linhas',
-    resolutionRule: 'Estrofes com linha em branco e marcadores [Verso], [Coro], [Ponte]',
-    notes: 'O portal gera os arquivos .txt já formatados para importar direto no Holyrics.',
+    recommended: '.txt em blocos de 2 a 4 linhas',
+    resolutionRule: 'Estrofes separadas por linha em branco',
+    notes: 'Gerado automaticamente ao salvar as músicas.',
   },
 ];
+
+export const SAMPLE_SCHEDULE_TEXT = `NOVA JOVENS - 21/11/2026
+
+19h00 – Vídeo Nova Jovens 2 (1min)
+19h01 – Arranque (1min)
+19h02 – M1: Medley Morada (5min)
+19h07 – M2: Viver por Ti (5min)
+19h12 – Avisos (10min)
+19h22 – Podcast Missionário (10min)
+19h32 – M3: Até que Ele venha (5min)
+19h37 – Testemunhos (3min)
+19h40 – M4: Pregue o evangelho (5min)
+19h43 – Mensagem (47min)
+20h30 – FIM`;
 
 export const INITIAL_MEMBERS: MemberUser[] = [
   {
@@ -209,12 +232,12 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
   id: 'srv-2026-11-21',
   title: 'Culto Nova Jovens 2',
   serviceDate: '2026-11-21',
-  startsAtTime: '19:30',
+  startsAtTime: '19:00',
   programmingTeam: 'ALPHA',
   status: 'VALIDATING',
   cutoffLabel: 'Sexta-feira, 20:00',
   isFrozen: false,
-  liveNotes: 'Conferir áudio do vídeo de abertura às 19:05 antes da entrada da igreja.',
+  liveNotes: 'Atenção: soltar a trilha do Arranque logo após o Vídeo Nova Jovens 2.',
   screens: [
     {
       code: 'LEFT',
@@ -281,78 +304,209 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       servingOnDesk: false,
     },
   ],
+  schedules: [
+    {
+      date: '2026-11-07',
+      programmingTeam: 'BRAVO',
+      isPast: true,
+      assignments: [
+        { id: 'h1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-2', position: 'PRINCIPAL', userId: 'usr-1', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-3', position: 'RETORNO', userId: 'usr-5', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-4', position: 'CORTE', userId: 'usr-3', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-5', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+      ],
+    },
+    {
+      date: '2026-11-14',
+      programmingTeam: 'CHARLIE',
+      isPast: true,
+      assignments: [
+        { id: 'h2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-3', position: 'RETORNO', userId: 'usr-3', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-4', position: 'CORTE', userId: 'usr-2', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-5', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+      ],
+    },
+    {
+      date: '2026-11-21',
+      programmingTeam: 'ALPHA',
+      assignments: [
+        { id: 'asg-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', confirmedAt: '18:10', servingOnDesk: true, deskCheckinAt: '18:48' },
+        { id: 'asg-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'CONFIRMED', confirmedAt: '17:40', servingOnDesk: true, deskCheckinAt: '18:52' },
+        { id: 'asg-3', position: 'RETORNO', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '18:02', servingOnDesk: false },
+        { id: 'asg-4', position: 'CORTE', userId: 'usr-5', attendanceStatus: 'CONFIRMED', confirmedAt: '18:15', servingOnDesk: false },
+        { id: 'asg-5', position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+      ],
+    },
+    {
+      date: '2026-11-28',
+      programmingTeam: 'BRAVO',
+      assignments: [
+        { id: 'n1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n1-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '10:15', servingOnDesk: false },
+        { id: 'n1-3', position: 'RETORNO', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n1-4', position: 'CORTE', userId: 'usr-1', attendanceStatus: 'CONFIRMED', confirmedAt: '11:00', servingOnDesk: false },
+        { id: 'n1-5', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+      ],
+    },
+    {
+      date: '2026-12-05',
+      programmingTeam: 'CHARLIE',
+      assignments: [
+        { id: 'n2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-2', position: 'PRINCIPAL', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-3', position: 'RETORNO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-4', position: 'CORTE', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-5', position: 'APOIO', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
+      ],
+    },
+    {
+      date: '2026-12-12',
+      programmingTeam: 'ALPHA',
+      assignments: [
+        { id: 'n3-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-3', position: 'RETORNO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-4', position: 'CORTE', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-5', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
+      ],
+    },
+  ],
   runItems: [
     {
       id: 'run-1',
       orderIndex: 1,
-      plannedTime: '19:20',
-      durationMinutes: 10,
-      title: 'Pré-culto e Contagem Regressiva',
-      description: 'Vídeo em loop nas três telas com trilha ambiente.',
+      plannedTime: '19:00',
+      durationMinutes: 1,
+      title: 'Vídeo Nova Jovens 2',
+      description: 'Abertura oficial nas três telas.',
       itemType: 'OPENING',
-      responsibleName: 'Mesa de Projeção',
+      responsibleName: 'Equipe Alpha',
       requiresMedia: true,
-      liveStatus: 'DONE',
-      liveStartedAt: '19:20',
-      liveFinishedAt: '19:30',
+      liveStatus: 'CURRENT',
+      liveStartedAt: '19:00',
     },
     {
       id: 'run-2',
       orderIndex: 2,
-      plannedTime: '19:30',
-      durationMinutes: 5,
-      title: 'Vídeo de Abertura — Nova Jovens 2',
-      description: 'Soltar vídeo nas três telas com áudio em linha.',
+      plannedTime: '19:01',
+      durationMinutes: 1,
+      title: 'Arranque',
+      description: 'Entrada animada com a equipe no palco.',
       itemType: 'PROGRAMMING',
       responsibleName: 'Equipe Alpha',
       requiresMedia: true,
-      liveStatus: 'CURRENT',
-      liveStartedAt: '19:31',
-      captainNotes: 'Corte para câmera 1 assim que terminar o vídeo.',
+      liveStatus: 'PENDING',
     },
     {
       id: 'run-3',
       orderIndex: 3,
-      plannedTime: '19:35',
-      durationMinutes: 25,
-      title: 'Bloco de Louvor',
-      description: 'Três músicas em sequência com retorno ativo para o palco.',
+      plannedTime: '19:02',
+      durationMinutes: 5,
+      title: 'M1: Medley Morada',
+      description: 'Música M1 — letra no Holyrics.',
       itemType: 'WORSHIP',
-      responsibleName: 'Ministério de Música',
+      responsibleName: 'Música',
+      songCode: 'M1',
       requiresMedia: false,
       liveStatus: 'PENDING',
     },
     {
       id: 'run-4',
       orderIndex: 4,
-      plannedTime: '20:00',
-      durationMinutes: 12,
-      title: 'Dinâmica e Avisos da Semana',
-      description: 'Slides da Equipe Alpha e QR do acampamento.',
+      plannedTime: '19:07',
+      durationMinutes: 5,
+      title: 'M2: Viver por Ti',
+      description: 'Música M2 — letra no Holyrics.',
+      itemType: 'WORSHIP',
+      responsibleName: 'Música',
+      songCode: 'M2',
+      requiresMedia: false,
+      liveStatus: 'PENDING',
+    },
+    {
+      id: 'run-5',
+      orderIndex: 5,
+      plannedTime: '19:12',
+      durationMinutes: 10,
+      title: 'Avisos',
+      description: 'Banners dos próximos eventos.',
       itemType: 'ANNOUNCEMENTS',
       responsibleName: 'Equipe Alpha',
       requiresMedia: true,
       liveStatus: 'PENDING',
     },
     {
-      id: 'run-5',
-      orderIndex: 5,
-      plannedTime: '20:12',
-      durationMinutes: 38,
-      title: 'Palavra e Versículos Projetados',
-      description: 'Textos bíblicos no telão central e pontos nas laterais.',
-      itemType: 'WORD',
-      responsibleName: 'Preletor e Mesa',
+      id: 'run-6',
+      orderIndex: 6,
+      plannedTime: '19:22',
+      durationMinutes: 10,
+      title: 'Podcast Missionário',
+      description: 'Vinheta e fundo do podcast.',
+      itemType: 'PROGRAMMING',
+      responsibleName: 'Equipe Alpha',
       requiresMedia: true,
       liveStatus: 'PENDING',
     },
     {
-      id: 'run-6',
-      orderIndex: 6,
-      plannedTime: '20:50',
-      durationMinutes: 10,
-      title: 'Oração Final e Encerramento',
-      description: 'Tela fixa do Nova Jovens 2 na saída.',
+      id: 'run-7',
+      orderIndex: 7,
+      plannedTime: '19:32',
+      durationMinutes: 5,
+      title: 'M3: Até que Ele venha',
+      description: 'Música M3 — letra no Holyrics.',
+      itemType: 'WORSHIP',
+      responsibleName: 'Música',
+      songCode: 'M3',
+      requiresMedia: false,
+      liveStatus: 'PENDING',
+    },
+    {
+      id: 'run-8',
+      orderIndex: 8,
+      plannedTime: '19:37',
+      durationMinutes: 3,
+      title: 'Testemunhos',
+      description: 'Tela limpa com logo de fundo.',
+      itemType: 'PROGRAMMING',
+      responsibleName: 'Equipe Alpha',
+      requiresMedia: false,
+      liveStatus: 'PENDING',
+    },
+    {
+      id: 'run-9',
+      orderIndex: 9,
+      plannedTime: '19:40',
+      durationMinutes: 5,
+      title: 'M4: Pregue o evangelho',
+      description: 'Música M4 — letra no Holyrics.',
+      itemType: 'WORSHIP',
+      responsibleName: 'Música',
+      songCode: 'M4',
+      requiresMedia: false,
+      liveStatus: 'PENDING',
+    },
+    {
+      id: 'run-10',
+      orderIndex: 10,
+      plannedTime: '19:43',
+      durationMinutes: 47,
+      title: 'Mensagem',
+      description: 'Versículos e slides da palavra.',
+      itemType: 'WORD',
+      responsibleName: 'Preletor + Mesa',
+      requiresMedia: true,
+      liveStatus: 'PENDING',
+    },
+    {
+      id: 'run-11',
+      orderIndex: 11,
+      plannedTime: '20:30',
+      durationMinutes: 0,
+      title: 'FIM',
+      description: 'Encerramento do culto.',
       itemType: 'CLOSING',
       responsibleName: 'Mesa de Projeção',
       requiresMedia: false,
@@ -362,132 +516,85 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
   songs: [
     {
       id: 'sng-1',
+      songCode: 'M1',
       orderIndex: 1,
-      title: 'Lugar Secreto',
-      artist: 'Gabriela Rocha',
+      title: 'Medley Morada',
+      artist: 'Morada',
       key: 'G',
-      bpm: 72,
+      bpm: 74,
       rawLyrics: `[Verso 1]
-Tu és tudo o que eu mais quero
-O meu fôlego Tu és
-Em Teus braços é o meu lugar
-Estou aqui, estou aqui
-
-[Coro]
-Pai, eu amo Tua presença
-Teu sorriso é vida em mim
-Eu seguro em Tuas mãos
-Confio em Ti, confio em Ti`,
-      holyricsTxt: `Lugar Secreto - Gabriela Rocha
-Tom: G | BPM: 72
-
-[Verso 1]
-Tu és tudo o que eu mais quero
-O meu fôlego Tu és
-
-Em Teus braços é o meu lugar
-Estou aqui, estou aqui
-
-[Coro]
-Pai, eu amo Tua presença
-Teu sorriso é vida em mim
-
-Eu seguro em Tuas mãos
-Confio em Ti, confio em Ti`,
+O que Tua glória fez comigo
+Eu não sei explicar
+Só sei que agora eu quero mais
+De Ti, Jesus`,
+      holyricsTxt: `Medley Morada - Morada\nTom: G | BPM: 74\n\n[Verso 1]\nO que Tua glória fez comigo\nEu não sei explicar\n\nSó sei que agora eu quero mais\nDe Ti, Jesus`,
       approved: true,
-      notes: 'Fundo escuro com letra branca limpa.',
       addedBy: 'Beatriz Almeida',
     },
     {
       id: 'sng-2',
+      songCode: 'M2',
       orderIndex: 2,
-      title: 'A Casa É Sua',
-      artist: 'Casa Worship',
+      title: 'Viver por Ti',
+      artist: 'Nova Jovens',
       key: 'A',
-      bpm: 76,
-      rawLyrics: `[Verso 1]
-Você é bem-vindo aqui
-A casa é Sua, pode entrar
-Me esvazio de mim
-Me esvazio de mim
-
-[Coro]
-Sopra o Teu vento aqui
-Toma o Teu lugar
-Faz o que quiseres fazer`,
-      holyricsTxt: `A Casa É Sua - Casa Worship
-Tom: A | BPM: 76
-
-[Verso 1]
-Você é bem-vindo aqui
-A casa é Sua, pode entrar
-
-Me esvazio de mim
-Me esvazio de mim
-
-[Coro]
-Sopra o Teu vento aqui
-Toma o Teu lugar
-Faz o que quiseres fazer`,
+      bpm: 122,
+      rawLyrics: `[Coro]
+Eu quero viver por Ti
+Em todo tempo Te servir
+A minha vida entrego a Ti`,
+      holyricsTxt: `Viver por Ti - Nova Jovens\nTom: A | BPM: 122\n\n[Coro]\nEu quero viver por Ti\nEm todo tempo Te servir\nA minha vida entrego a Ti`,
       approved: true,
       addedBy: 'Beatriz Almeida',
     },
     {
       id: 'sng-3',
+      songCode: 'M3',
       orderIndex: 3,
-      title: 'Bondade de Deus',
-      artist: 'Isaías Saad',
-      key: 'G',
-      bpm: 64,
+      title: 'Até que Ele venha',
+      artist: 'Ministério',
+      key: 'E',
+      bpm: 70,
       rawLyrics: `[Verso 1]
-Te amo, Deus, Tua graça nunca falha
-Todos os dias eu estou em Tuas mãos
-Desde quando me levanto até eu me deitar
-Eu cantarei da bondade de Deus
-
-[Coro]
-És fiel em todo tempo
-Em todo tempo Tu és tão, tão bom
-Com todo fôlego que tenho
-Eu cantarei da bondade de Deus`,
-      holyricsTxt: `Bondade de Deus - Isaías Saad
-Tom: G | BPM: 64
-
-[Verso 1]
-Te amo, Deus, Tua graça nunca falha
-Todos os dias eu estou em Tuas mãos
-
-Desde quando me levanto até eu me deitar
-Eu cantarei da bondade de Deus
-
-[Coro]
-És fiel em todo tempo
-Em todo tempo Tu és tão, tão bom
-
-Com todo fôlego que tenho
-Eu cantarei da bondade de Deus`,
+Maranata, ora vem Senhor Jesus
+Até que Ele venha estaremos aqui`,
+      holyricsTxt: `Até que Ele venha - Ministério\nTom: E | BPM: 70\n\n[Verso 1]\nMaranata, ora vem Senhor Jesus\nAté que Ele venha estaremos aqui`,
       approved: false,
-      notes: 'Confirmar repetição da ponte no ensaio.',
       addedBy: 'Beatriz Almeida',
+    },
+    {
+      id: 'sng-4',
+      songCode: 'M4',
+      orderIndex: 4,
+      title: 'Pregue o evangelho',
+      artist: 'Ministério',
+      key: 'C',
+      bpm: 76,
+      rawLyrics: '',
+      holyricsTxt: '',
+      approved: false,
+      addedBy: 'Roteiro (aguardando letra)',
     },
   ],
   mediaAssets: [
     {
       id: 'med-1',
       runItemId: 'run-1',
+      displayTrigger: 'RUN_ITEM',
+      note: 'Soltar com áudio no talo às 19h00 em ponto nos três telões.',
       targetScreen: 'ALL',
       category: 'VIDEO',
-      originalFilename: 'contagem_10min_4k.mp4',
-      normalizedFilename: '01_Abertura_contagem_10min_4k.mp4',
+      originalFilename: 'video_nova_jovens_2.mp4',
+      normalizedFilename: '01_video_nova_jovens_2.mp4',
       extension: '.mp4',
       mimeType: 'video/mp4',
-      fileSizeBytes: 142_600_000,
+      fileSizeBytes: 94_000_000,
       widthPx: 3840,
       heightPx: 2160,
       aspectRatio: '16:9',
-      durationSeconds: 600,
+      durationSeconds: 60,
       validationStatus: 'VALID',
-      validationMessages: ['Proporção 16:9 pronta para o Telão Central (3840×2160) e Laterais (3200×1800).'],
+      validationMessages: ['Proporção 16:9 pronta para os três telões.'],
       uploadedBy: 'Matheus Rocha',
       createdAt: '18:20',
       approved: true,
@@ -495,46 +602,46 @@ Eu cantarei da bondade de Deus`,
     },
     {
       id: 'med-2',
-      runItemId: 'run-2',
+      displayTrigger: 'ARRANQUE',
+      note: 'Deixar em loop na hora do Arranque enquanto o pessoal sobe.',
       targetScreen: 'ALL',
       category: 'VIDEO',
-      originalFilename: 'abertura_alpha_novembro.mp4',
-      normalizedFilename: '02_Programacao_abertura_alpha_novembro.mp4',
+      originalFilename: 'loop_arranque_alpha.mp4',
+      normalizedFilename: 'ARRANQUE_loop_arranque_alpha.mp4',
       extension: '.mp4',
       mimeType: 'video/mp4',
-      fileSizeBytes: 86_400_000,
+      fileSizeBytes: 42_000_000,
       widthPx: 1920,
       heightPx: 1080,
       aspectRatio: '16:9',
-      durationSeconds: 95,
-      validationStatus: 'WARNING',
-      validationMessages: [
-        'Proporção 16:9 aceita no Holyrics (.mp4).',
-        'Arquivo em Full HD (1920×1080); funciona bem, mas o Telão Central suporta até 3840×2160.',
-      ],
+      durationSeconds: 18,
+      validationStatus: 'VALID',
+      validationMessages: ['Proporção 16:9 compatível com Holyrics.'],
       uploadedBy: 'Matheus Rocha',
-      createdAt: '18:35',
+      createdAt: '18:25',
       approved: true,
       isDemoPlaceholder: true,
     },
     {
       id: 'med-3',
-      runItemId: 'run-4',
+      displayTrigger: 'ON_REQUEST',
+      requestedBy: 'Pr. Lucas (na hora da brincadeira)',
+      note: 'Exibir somente quando ele fizer o sinal com a mão e pedir o placar.',
       targetScreen: 'CENTER',
       category: 'IMAGE',
-      originalFilename: 'aviso_acampamento_2026.png',
-      normalizedFilename: '04_Avisos_aviso_acampamento_2026.png',
+      originalFilename: 'placar_dinamica.png',
+      normalizedFilename: 'SOLICITADO_placar_dinamica.png',
       extension: '.png',
       mimeType: 'image/png',
-      fileSizeBytes: 4_200_000,
+      fileSizeBytes: 3_400_000,
       widthPx: 3840,
       heightPx: 2160,
       aspectRatio: '16:9',
       validationStatus: 'VALID',
-      validationMessages: ['Resolução exata do Telão Central (3840×2160).'],
+      validationMessages: ['Resolução nativa do Telão Central (3840×2160).'],
       uploadedBy: 'Matheus Rocha',
-      createdAt: '18:40',
-      approved: false,
+      createdAt: '18:30',
+      approved: true,
       isDemoPlaceholder: true,
     },
   ],
@@ -546,7 +653,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Segunda',
       completed: true,
       bibleReference: 'Salmos 27:1-4',
-      reflectionNote: 'Permanecer firme no Senhor durante a semana.',
+      reflectionNote: 'Permanecer firme no Senhor.',
       updatedAt: 'Seg 07:30',
     },
     {
@@ -576,7 +683,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Quinta',
       completed: true,
       bibleReference: 'Colossenses 3:23',
-      reflectionNote: 'Servir com excelência na mesa de projeção.',
+      reflectionNote: 'Servir com excelência.',
       updatedAt: 'Qui 21:10',
     },
     {
@@ -624,23 +731,15 @@ Eu cantarei da bondade de Deus`,
       actorName: 'Lucas Mendes',
       actorRole: 'CAPTAIN',
       action: 'Mesa',
-      detail: 'Lucas Mendes entrou na posição Capitão.',
+      detail: 'entrou na posição Capitão.',
     },
     {
       id: 'aud-2',
-      timestamp: '18:52',
-      actorName: 'Rafael Oliveira',
-      actorRole: 'MEMBER',
-      action: 'Mesa',
-      detail: 'Rafael Oliveira entrou na posição Principal.',
-    },
-    {
-      id: 'aud-3',
-      timestamp: '18:40',
+      timestamp: '18:30',
       actorName: 'Matheus Rocha',
       actorRole: 'PROGRAMMING',
       action: 'Mídia',
-      detail: 'Enviou aviso_acampamento_2026.png (3840×2160) no bloco 04.',
+      detail: 'enviou placar_dinamica.png (Quando solicitado por Pr. Lucas).',
     },
   ],
 };

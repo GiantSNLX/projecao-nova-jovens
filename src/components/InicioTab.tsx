@@ -33,6 +33,28 @@ export function InicioTab({
 
   return (
     <div className="space-y-8">
+      {/* Telão de boas-vindas */}
+      <section
+        aria-label="Telão Projeção"
+        className="relative flex aspect-video max-h-[250px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-[#0095FF]/35 bg-[#07080B] px-6 text-center"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,149,255,0.16),transparent_68%)]"
+        />
+        <div className="relative z-10 space-y-2">
+          <span className="font-mono-tech inline-block rounded border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium tracking-widest text-[#38BDF8]">
+            TELÃO PRINCIPAL · 16:9
+          </span>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-4xl">
+            Projeção
+          </h2>
+          <p className="text-sm font-medium text-zinc-200 sm:text-lg">
+            Projetando a Cristo através de mídias
+          </p>
+        </div>
+      </section>
+
       <section className="border-b border-white/10 pb-7">
         <p className="font-mono-tech text-xs text-zinc-400">
           {state.title} · {state.serviceDate} · {state.startsAtTime}

@@ -8,10 +8,10 @@ import type {
 } from '../types/portal';
 import { TEAM_LABELS, TRIGGER_LABELS } from '../data/initialState';
 
-const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'];
-const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.gif'];
-const AUDIO_EXTS = ['.mp3', '.wav', '.aac', '.ogg', '.flac'];
-const DOC_EXTS = ['.pdf', '.ppt', '.pptx'];
+const VIDEO_EXTS = ['.mp4', '.mov', '.mkv', '.avi', '.wmv', '.webm'];
+const IMAGE_EXTS = ['.png', '.jpg', '.jpeg'];
+const AUDIO_EXTS = ['.mp3', '.wav', '.aac', '.ogg'];
+const DOC_EXTS = ['.pdf'];
 
 export function getExtension(filename: string): string {
   const idx = filename.lastIndexOf('.');
@@ -131,12 +131,22 @@ export function validateMediaForHolyrics(params: {
   const category = detectMediaCategory(params.filename);
   const messages: string[] = [];
 
+  if (ext === '.ppt' || ext === '.pptx') {
+    return {
+      category: 'DOCUMENT',
+      status: 'REJECTED',
+      messages: [
+        'Bloqueado: PPT/PPTX quebra fontes e exige PowerPoint na mesa. Exporte os slides em PDF ou imagens PNG/JPG 16:9.',
+      ],
+    };
+  }
+
   if (!category) {
     return {
       category: null,
       status: 'REJECTED',
       messages: [
-        `Formato "${ext || 'sem extensão'}" não é aceito pelo Holyrics.`,
+        `Bloqueado: formato "${ext || 'sem extensão'}" não é aceito nos telões. Use MP4/MOV/MKV/WEBM, PNG/JPG, MP3/WAV ou PDF.`,
       ],
     };
   }
@@ -144,33 +154,30 @@ export function validateMediaForHolyrics(params: {
   let status: MediaValidationStatus = 'VALID';
   let aspectRatio: string | undefined;
 
-  if (ext === '.ppt' || ext === '.pptx') {
-    status = 'WARNING';
-    messages.push(
-      'PPT/PPTX exige PowerPoint instalado no Windows da mesa. Prefira PDF ou PNG 16:9.',
-    );
-  }
-
   if (params.widthPx && params.heightPx) {
     const ratio = params.widthPx / params.heightPx;
     const target169 = 16 / 9;
-    const is169 = Math.abs(ratio - target169) <= 0.03;
+    const is169 = Math.abs(ratio - target169) <= 0.05;
     aspectRatio = is169 ? '16:9' : `${params.widthPx}:${params.heightPx}`;
 
     if (!is169) {
-      status = 'WARNING';
-      messages.push(
-        `Proporção ${params.widthPx}×${params.heightPx} foge do padrão 16:9 dos três telões.`,
-      );
-    } else {
-      messages.push(`Proporção 16:9 validada (${params.widthPx}×${params.heightPx}).`);
+      const orient = params.widthPx < params.heightPx ? 'vertical' : 'fora do padrão 16:9';
+      return {
+        category,
+        status: 'REJECTED',
+        aspectRatio,
+        messages: [
+          `Bloqueado: o arquivo tem ${params.widthPx}×${params.heightPx} (${orient}). Reexporte em 16:9 (1920×1080, 3200×1800 ou 3840×2160).`,
+        ],
+      };
     }
 
-    const centerScreen = params.screens.find((s) => s.code === 'CENTER');
-    if (centerScreen && params.widthPx < 1280) {
+    messages.push(`Proporção 16:9 validada (${params.widthPx}×${params.heightPx}).`);
+
+    if (params.widthPx < 1280) {
       status = 'WARNING';
       messages.push(
-        `Resolução baixa (${params.widthPx}×${params.heightPx}) para o Telão Central (${centerScreen.widthPx}×${centerScreen.heightPx}).`,
+        `Resolução baixa (${params.widthPx}×${params.heightPx}) — recomendado mínimo 1280×720 para os telões.`,
       );
     }
   } else if (category === 'AUDIO') {

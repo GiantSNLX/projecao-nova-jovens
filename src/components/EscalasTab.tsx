@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
+  Archive,
+  Building2,
   CalendarPlus,
   CheckCircle2,
   Clock,
+  DoorOpen,
+  Plus,
+  RotateCcw,
   UserCheck,
   XCircle,
 } from 'lucide-react';
@@ -10,23 +15,37 @@ import type {
   AttendanceStatus,
   DeskPosition,
   MemberUser,
+  SaturdaySchedule,
+  ScheduleLocationType,
   ServiceState,
 } from '../types/portal';
 import { DESK_POSITION_INFO } from '../data/initialState';
+
+export interface NewSchedulePayload {
+  date: string;
+  title: string;
+  locationType: ScheduleLocationType;
+  roomName?: string;
+}
 
 interface EscalasTabProps {
   state: ServiceState;
   members: MemberUser[];
   activeUser: MemberUser;
   isLeader: boolean;
-  onUpdateAttendance: (scheduleDate: string, assignmentId: string, status: AttendanceStatus) => void;
-  onToggleServingOnDesk: (scheduleDate: string, assignmentId: string) => void;
-  onChangeAssignmentMember: (scheduleDate: string, assignmentId: string, userId: string) => void;
-  onUpdateScheduleTitle: (scheduleDate: string, title: string) => void;
-  onAddNextSaturday: () => void;
+  onUpdateAttendance: (scheduleId: string, assignmentId: string, status: AttendanceStatus) => void;
+  onToggleServingOnDesk: (scheduleId: string, assignmentId: string) => void;
+  onChangeAssignmentMember: (scheduleId: string, assignmentId: string, userId: string) => void;
+  onUpdateScheduleDetails: (
+    scheduleId: string,
+    patch: { title?: string; locationType?: ScheduleLocationType; roomName?: string },
+  ) => void;
+  onTogglePositionInSchedule: (scheduleId: string, position: DeskPosition) => void;
+  onAddSchedule: (payload: NewSchedulePayload) => string;
+  onToggleArchiveSchedule: (scheduleId: string, archived: boolean) => void;
 }
 
-type EscalaSubTab = 'ver' | 'montar';
+type EscalaSubTab = 'ver' | 'montar' | 'arquivados';
 
 const ALL_POSITIONS: DeskPosition[] = [
   'CAPITAO',
@@ -43,6 +62,13 @@ function formatDateBr(isoDate: string): string {
   return `${d}/${m}/${y}`;
 }
 
+function getLocationLabel(locationType: ScheduleLocationType, roomName?: string): string {
+  if (locationType === 'SALA') {
+    return roomName?.trim() ? roomName.trim() : 'Sala';
+  }
+  return 'Auditório Principal';
+}
+
 export function EscalasTab({
   state,
   members,
@@ -51,26 +77,65 @@ export function EscalasTab({
   onUpdateAttendance,
   onToggleServingOnDesk,
   onChangeAssignmentMember,
-  onUpdateScheduleTitle,
-  onAddNextSaturday,
+  onUpdateScheduleDetails,
+  onTogglePositionInSchedule,
+  onAddSchedule,
+  onToggleArchiveSchedule,
 }: EscalasTabProps) {
   const [subTab, setSubTab] = useState<EscalaSubTab>('ver');
+  const [showNewForm, setShowNewForm] = useState(false);
+
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const isScheduleArchived = (s: SaturdaySchedule): boolean =>
+    s.isPast === true ||
+    (s.isPast === undefined && s.date < todayIso && s.id !== state.activeScheduleId);
 
   const upcomingSchedules = useMemo(
-    () => state.schedules.filter((s) => !s.isPast).sort((a, b) => a.date.localeCompare(b.date)),
-    [state.schedules],
+    () =>
+      state.schedules
+        .filter((s) => !isScheduleArchived(s))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.schedules, state.activeScheduleId, todayIso],
   );
 
-  const [selectedDate, setSelectedDate] = useState<string>(
-    upcomingSchedules[0]?.date ?? state.serviceDate,
+  const archivedSchedules = useMemo(
+    () =>
+      state.schedules
+        .filter((s) => isScheduleArchived(s))
+        .sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.schedules, state.activeScheduleId, todayIso],
+  );
+
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(
+    state.activeScheduleId || upcomingSchedules[0]?.id || '',
   );
 
   const activeSchedule =
-    upcomingSchedules.find((s) => s.date === selectedDate) ?? upcomingSchedules[0];
+    upcomingSchedules.find((s) => s.id === selectedScheduleId) ?? upcomingSchedules[0];
+
+  const sameDateSchedules = useMemo(() => {
+    if (!activeSchedule) return [];
+    return upcomingSchedules.filter((s) => s.date === activeSchedule.date);
+  }, [upcomingSchedules, activeSchedule]);
+
+  const [newDate, setNewDate] = useState(
+    upcomingSchedules[upcomingSchedules.length - 1]?.date ?? state.serviceDate,
+  );
+  const [newTitle, setNewTitle] = useState('');
+  const [newLocationType, setNewLocationType] =
+    useState<ScheduleLocationType>('AUDITORIO_PRINCIPAL');
+  const [newRoomName, setNewRoomName] = useState('Sala 2');
 
   const historyStats = useMemo(() => {
     const deskMembers = members.filter(
-      (m) => m.roles.includes('MEMBER') && (m.ministry.includes('Projeção') || m.roles.includes('CAPTAIN')),
+      (m) =>
+        m.active &&
+        (!m.roles.includes('MUSIC') && !m.roles.includes('PROGRAMMING') ||
+          m.roles.includes('CAPTAIN') ||
+          m.roles.includes('ADMIN')),
     );
 
     return deskMembers.map((member) => {
@@ -109,7 +174,34 @@ export function EscalasTab({
     });
   }, [members, state.schedules]);
 
-  const activeSubTab: EscalaSubTab = isLeader ? subTab : 'ver';
+  const activeSubTab: EscalaSubTab =
+    !isLeader && subTab === 'montar' ? 'ver' : subTab;
+
+  const handleQuickAddParallelOnSameDay = () => {
+    if (!activeSchedule) return;
+    const parallelNum = sameDateSchedules.length + 1;
+    const createdId = onAddSchedule({
+      date: activeSchedule.date,
+      title: `${activeSchedule.title} — Programação ${parallelNum}`,
+      locationType: 'SALA',
+      roomName: `Sala ${parallelNum}`,
+    });
+    setSelectedScheduleId(createdId);
+  };
+
+  const handleCreateSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDate || !newTitle.trim()) return;
+    const createdId = onAddSchedule({
+      date: newDate,
+      title: newTitle.trim(),
+      locationType: newLocationType,
+      roomName: newLocationType === 'SALA' ? newRoomName.trim() || 'Sala' : undefined,
+    });
+    setSelectedScheduleId(createdId);
+    setNewTitle('');
+    setShowNewForm(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -118,24 +210,26 @@ export function EscalasTab({
           <h1 className="text-2xl font-semibold tracking-tight text-white">Escalas</h1>
           <p className="mt-1 text-sm text-zinc-400">
             {activeSubTab === 'ver'
-              ? 'Veja os próximos sábados da mesa e confirme somente a sua escala.'
-              : 'Monte a escala, defina o nome/tema do culto e controle quem já serviu em cada posição.'}
+              ? 'Veja os eventos de cada sábado (auditório ou salas) e confirme somente a sua escala.'
+              : activeSubTab === 'montar'
+                ? 'Monte a escala, adicione mais de uma programação no mesmo dia e controle o rodízio.'
+                : 'Cultos anteriores e arquivados para consulta da equipe.'}
           </p>
         </div>
 
-        {isLeader && (
-          <div className="inline-flex rounded-lg border border-white/12 bg-[#12141A] p-1">
-            <button
-              type="button"
-              onClick={() => setSubTab('ver')}
-              className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
-                activeSubTab === 'ver'
-                  ? 'bg-[#0095FF] text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Escala da semana
-            </button>
+        <div className="inline-flex flex-wrap rounded-lg border border-white/12 bg-[#12141A] p-1">
+          <button
+            type="button"
+            onClick={() => setSubTab('ver')}
+            className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
+              activeSubTab === 'ver'
+                ? 'bg-[#0095FF] text-white'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Escala da semana
+          </button>
+          {isLeader && (
             <button
               type="button"
               onClick={() => setSubTab('montar')}
@@ -147,29 +241,45 @@ export function EscalasTab({
             >
               Montar escala
             </button>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={() => setSubTab('arquivados')}
+            className={`min-h-[40px] rounded-md px-3.5 text-sm font-medium transition-colors ${
+              activeSubTab === 'arquivados'
+                ? 'bg-[#0095FF] text-white'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Arquivados ({archivedSchedules.length})
+          </button>
+        </div>
       </div>
 
-      {/* Seletor dos próximos sábados com tema */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Seletor dos próximos sábados / múltiplos eventos no mesmo dia */}
+      {activeSubTab !== 'arquivados' && (
+        <div className="flex flex-wrap items-center gap-2">
         {upcomingSchedules.map((sched) => {
-          const isSelected = activeSchedule?.date === sched.date;
+          const isSelected = activeSchedule?.id === sched.id;
+          const locLabel = getLocationLabel(sched.locationType, sched.roomName);
           return (
             <button
-              key={sched.date}
+              key={sched.id}
               type="button"
-              onClick={() => setSelectedDate(sched.date)}
-              className={`min-h-[48px] rounded-lg border px-3.5 py-1.5 text-left transition-colors ${
+              onClick={() => setSelectedScheduleId(sched.id)}
+              className={`min-h-[54px] rounded-lg border px-3.5 py-2 text-left transition-colors ${
                 isSelected
                   ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
                   : 'border-white/10 bg-[#12141A] text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <div className="font-mono-tech text-xs opacity-80">
-                {formatDateBr(sched.date)}
+              <div className="flex items-center gap-2 text-xs opacity-85">
+                <span className="font-mono-tech">{formatDateBr(sched.date)}</span>
+                <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
+                  {locLabel}
+                </span>
               </div>
-              <div className="text-sm font-medium text-white">{sched.title}</div>
+              <div className="mt-0.5 text-sm font-medium text-white">{sched.title}</div>
             </button>
           );
         })}
@@ -177,22 +287,114 @@ export function EscalasTab({
         {activeSubTab === 'montar' && isLeader && (
           <button
             type="button"
-            onClick={onAddNextSaturday}
-            className="inline-flex min-h-[48px] items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
+            onClick={() => setShowNewForm((prev) => !prev)}
+            className="inline-flex min-h-[54px] items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
           >
             <CalendarPlus className="h-4 w-4 text-[#0095FF]" />
-            <span>Adicionar sábado</span>
+            <span>Novo evento</span>
           </button>
         )}
-      </div>
+        </div>
+      )}
+
+      {/* Formulário para criar evento adicional (inclusive no mesmo dia!) */}
+      {activeSubTab === 'montar' && isLeader && showNewForm && (
+        <form
+          onSubmit={handleCreateSchedule}
+          className="rounded-xl border border-[#0095FF]/35 bg-[#12141A] p-4 space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">
+              Criar culto / evento na escala
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowNewForm(false)}
+              className="text-xs text-zinc-400 hover:text-white"
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">Data (pode repetir o dia)</span>
+              <input
+                type="date"
+                required
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="font-mono-tech min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">Nome / Tema</span>
+              <input
+                type="text"
+                required
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Ex.: Culto Jovens, Sala Teen..."
+                className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">Local</span>
+              <select
+                value={newLocationType}
+                onChange={(e) => setNewLocationType(e.target.value as ScheduleLocationType)}
+                className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+              >
+                <option value="AUDITORIO_PRINCIPAL">Auditório Principal (6 funções)</option>
+                <option value="SALA">Sala (somente Principal e Retorno)</option>
+              </select>
+            </label>
+
+            {newLocationType === 'SALA' && (
+              <label className="block">
+                <span className="mb-1 block text-xs text-zinc-400">Qual sala?</span>
+                <input
+                  type="text"
+                  required
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="Ex.: Sala 2"
+                  className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="min-h-[44px] rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]"
+            >
+              Criar evento na escala
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* SUB-ABA 1: VISUALIZAÇÃO LIMPA DA ESCALA */}
       {activeSubTab === 'ver' && activeSchedule && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
-            <span className="font-semibold text-white">{activeSchedule.title}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-white">{activeSchedule.title}</span>
+              <span className="inline-flex items-center gap-1 rounded border border-white/10 bg-[#12141A] px-2 py-0.5 text-xs text-zinc-300">
+                {activeSchedule.locationType === 'SALA' ? (
+                  <DoorOpen className="h-3.5 w-3.5 text-[#0095FF]" />
+                ) : (
+                  <Building2 className="h-3.5 w-3.5 text-[#0095FF]" />
+                )}
+                {getLocationLabel(activeSchedule.locationType, activeSchedule.roomName)}
+              </span>
+            </div>
             <span className="font-mono-tech text-xs text-zinc-400">
-              {formatDateBr(activeSchedule.date)} · 19h00
+              {formatDateBr(activeSchedule.date)} · {activeSchedule.assignments.length} funções
             </span>
           </div>
 
@@ -257,7 +459,7 @@ export function EscalasTab({
                           <button
                             type="button"
                             onClick={() =>
-                              onUpdateAttendance(activeSchedule.date, assignment.id, 'CONFIRMED')
+                              onUpdateAttendance(activeSchedule.id, assignment.id, 'CONFIRMED')
                             }
                             className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-medium transition-colors ${
                               assignment.attendanceStatus === 'CONFIRMED'
@@ -270,7 +472,7 @@ export function EscalasTab({
                           <button
                             type="button"
                             onClick={() =>
-                              onUpdateAttendance(activeSchedule.date, assignment.id, 'DECLINED')
+                              onUpdateAttendance(activeSchedule.id, assignment.id, 'DECLINED')
                             }
                             className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-medium transition-colors ${
                               assignment.attendanceStatus === 'DECLINED'
@@ -286,7 +488,7 @@ export function EscalasTab({
                           <button
                             type="button"
                             onClick={() =>
-                              onToggleServingOnDesk(activeSchedule.date, assignment.id)
+                              onToggleServingOnDesk(activeSchedule.id, assignment.id)
                             }
                             className={`min-h-[44px] rounded-lg px-4 text-sm font-semibold transition-colors ${
                               assignment.servingOnDesk
@@ -309,33 +511,144 @@ export function EscalasTab({
         </div>
       )}
 
-      {/* SUB-ABA 2: MONTAR ESCALA + TEMA DA NOITE + RODÍZIO (SOMENTE LIDERANÇA) */}
+      {/* SUB-ABA 2: MONTAR ESCALA + LOCAL/SALA + RODÍZIO (SOMENTE LIDERANÇA) */}
       {activeSubTab === 'montar' && isLeader && activeSchedule && (
         <div className="space-y-8">
           <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-            <div className="border-b border-white/10 pb-4">
-              <h2 className="text-base font-semibold text-white">
-                Montar escala — {formatDateBr(activeSchedule.date)}
-              </h2>
-              <p className="text-sm text-zinc-400">
-                Defina o tema/nome do culto (ex.: Noite Manauara, Congresso) e quem assume cada posição.
-              </p>
+            <div className="border-b border-white/10 pb-4 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Montar escala — {formatDateBr(activeSchedule.date)}
+                  </h2>
+                  <p className="text-sm text-zinc-400">
+                    Adicione mais de uma escala/programação no mesmo culto e alterne entre elas ao lado.
+                  </p>
+                </div>
 
-              <div className="mt-4">
-                <label
-                  htmlFor="schedule-theme"
-                  className="block text-sm font-medium text-zinc-300"
-                >
-                  Nome / Tema do culto ou programação
+                {/* Área superior direita destacada: adicionar escala/programação no mesmo dia + trocar + arquivar */}
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleQuickAddParallelOnSameDay}
+                    className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg bg-[#0095FF] px-3.5 text-xs font-semibold text-white hover:bg-[#0082E0]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Programação neste culto</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleArchiveSchedule(activeSchedule.id, true)}
+                    className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5"
+                  >
+                    <Archive className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Arquivar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Abas trocáveis quando há 1+ escalas/programações neste mesmo culto/dia */}
+              {sameDateSchedules.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/8 bg-[#0B0C0F] p-2">
+                  <span className="px-1.5 text-[11px] font-medium text-zinc-400">
+                    Programações deste dia ({sameDateSchedules.length}):
+                  </span>
+                  {sameDateSchedules.map((sd, idx) => {
+                    const isCurr = sd.id === activeSchedule.id;
+                    return (
+                      <button
+                        key={sd.id}
+                        type="button"
+                        onClick={() => setSelectedScheduleId(sd.id)}
+                        className={`min-h-[36px] rounded-md px-3 text-xs font-semibold transition ${
+                          isCurr
+                            ? 'bg-[#0095FF] text-white'
+                            : 'border border-white/10 text-zinc-300 hover:bg-white/5'
+                        }`}
+                      >
+                        {idx + 1}. {getLocationLabel(sd.locationType, sd.roomName)} · {sd.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-400">
+                    Nome / Tema do culto ou programação
+                  </span>
+                  <input
+                    type="text"
+                    value={activeSchedule.title}
+                    onChange={(e) =>
+                      onUpdateScheduleDetails(activeSchedule.id, { title: e.target.value })
+                    }
+                    placeholder="Ex.: Noite Manauara, Congresso..."
+                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                  />
                 </label>
-                <input
-                  id="schedule-theme"
-                  type="text"
-                  value={activeSchedule.title}
-                  onChange={(e) => onUpdateScheduleTitle(activeSchedule.date, e.target.value)}
-                  placeholder="Ex.: Noite Manauara, Congresso Jovens..."
-                  className="mt-1.5 min-h-[44px] w-full max-w-md rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
-                />
+
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-400">Local do evento</span>
+                  <select
+                    value={activeSchedule.locationType}
+                    onChange={(e) =>
+                      onUpdateScheduleDetails(activeSchedule.id, {
+                        locationType: e.target.value as ScheduleLocationType,
+                        roomName:
+                          e.target.value === 'SALA'
+                            ? activeSchedule.roomName || 'Sala 2'
+                            : undefined,
+                      })
+                    }
+                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+                  >
+                    <option value="AUDITORIO_PRINCIPAL">Auditório Principal</option>
+                    <option value="SALA">Sala</option>
+                  </select>
+                </label>
+
+                {activeSchedule.locationType === 'SALA' && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-zinc-400">Qual sala?</span>
+                    <input
+                      type="text"
+                      value={activeSchedule.roomName || ''}
+                      onChange={(e) =>
+                        onUpdateScheduleDetails(activeSchedule.id, { roomName: e.target.value })
+                      }
+                      placeholder="Ex.: Sala 2, Auditório Anexo"
+                      className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Ajuste fino de quais funções existem neste evento */}
+              <div>
+                <p className="mb-1.5 text-xs text-zinc-400">Funções ativas neste evento:</p>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_POSITIONS.map((pos) => {
+                    const active = activeSchedule.assignments.some((a) => a.position === pos);
+                    return (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => onTogglePositionInSchedule(activeSchedule.id, pos)}
+                        className={`min-h-[38px] rounded-lg border px-3 text-xs font-medium transition ${
+                          active
+                            ? 'border-[#0095FF]/50 bg-[#0095FF]/15 text-white'
+                            : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {active ? '✓ ' : '+ '}
+                        {DESK_POSITION_INFO[pos].label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -356,7 +669,7 @@ export function EscalasTab({
                       aria-label={`Selecionar membro para ${pos.label}`}
                       value={asg.userId}
                       onChange={(e) =>
-                        onChangeAssignmentMember(activeSchedule.date, asg.id, e.target.value)
+                        onChangeAssignmentMember(activeSchedule.id, asg.id, e.target.value)
                       }
                       className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none sm:w-72"
                     >
@@ -467,6 +780,74 @@ export function EscalasTab({
               ))}
             </div>
           </section>
+        </div>
+      )}
+
+      {/* SUB-ABA 3: CULTOS ARQUIVADOS */}
+      {activeSubTab === 'arquivados' && (
+        <div className="space-y-4">
+          {archivedSchedules.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-[#12141A] p-6 text-center text-sm text-zinc-400">
+              Nenhum culto arquivado ainda. Conforme os cultos passam ou são arquivados pela liderança, aparecem aqui.
+            </div>
+          ) : (
+            archivedSchedules.map((sched) => (
+              <section
+                key={sched.id}
+                className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-3"
+              >
+                <div className="flex flex-col gap-2 border-b border-white/8 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono-tech text-xs font-semibold text-zinc-400">
+                        {formatDateBr(sched.date)}
+                      </span>
+                      <span className="rounded bg-white/8 px-2 py-0.5 text-[11px] text-zinc-300">
+                        {getLocationLabel(sched.locationType, sched.roomName)}
+                      </span>
+                      <span className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-400">
+                        Arquivado
+                      </span>
+                    </div>
+                    <h2 className="mt-1 text-base font-semibold text-white">{sched.title}</h2>
+                  </div>
+
+                  {isLeader && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onToggleArchiveSchedule(sched.id, false);
+                        setSelectedScheduleId(sched.id);
+                        setSubTab('ver');
+                      }}
+                      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 hover:bg-white/5"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Reativar</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  {sched.assignments.map((asg) => {
+                    const member = members.find((m) => m.id === asg.userId);
+                    const pos = DESK_POSITION_INFO[asg.position];
+                    return (
+                      <div
+                        key={asg.id}
+                        className="rounded-lg border border-white/8 bg-[#0B0C0F] px-3 py-2 text-xs"
+                      >
+                        <div className="font-semibold text-zinc-400">{pos.short}</div>
+                        <div className="mt-0.5 truncate text-sm text-white">
+                          {member?.name ?? '—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
+          )}
         </div>
       )}
     </div>

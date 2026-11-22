@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   FileImage,
   FileUp,
   Info,
@@ -33,7 +34,7 @@ import {
   sanitizeSlug,
   validateMediaForHolyrics,
 } from '../utils/holyrics';
-import { parseScheduleText, readScheduleFromImage } from '../utils/scheduleOcr';
+import { findMatchingSong, parseScheduleText, readScheduleFromImage } from '../utils/scheduleOcr';
 import { StageSimulator } from './StageSimulator';
 
 interface ProgrammingTabProps {
@@ -64,15 +65,9 @@ export function ProgrammingTab({
   onToggleApproveMedia,
   onRemoveMediaAsset,
 }: ProgrammingTabProps) {
-  // Schedule OCR state
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
-  const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
-  const [draftScheduleText, setDraftScheduleText] = useState('');
-  const [ocrError, setOcrError] = useState<string | null>(null);
-  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
+  const [showSpecs, setShowSpecs] = useState(true);
 
-  // Media upload state with required "Quando exibir" + "Nota"
+  // Telão + media upload state
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [displayTrigger, setDisplayTrigger] = useState<MediaDisplayTrigger>('RUN_ITEM');
@@ -81,67 +76,89 @@ export function ProgrammingTab({
   const [mediaNote, setMediaNote] = useState('');
   const [targetScreen, setTargetScreen] = useState<ScreenTarget>('ALL');
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [showSpecs, setShowSpecs] = useState(false);
 
-  const sortedRunItems = state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex);
+  // Schedule OCR state
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [scheduleImagePreview, setScheduleImagePreview] = useState<string | null>(null);
+  const [draftScheduleText, setDraftScheduleText] = useState('');
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
-  const handleScheduleImageUpload = async (file: File) => {
-    setOcrError(null);
-    setImportSuccessMsg(null);
-    setScheduleImagePreview(URL.createObjectURL(file));
-    setOcrLoading(true);
-    setOcrProgress(0);
+  const sortedRunItems = useMemo(
+    () => state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex),
+    [state.runItems],
+  );
 
-    try {
-      const parsed = await readScheduleFromImage(
-        file,
-        `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
-        activeUserName,
-        (pct) => setOcrProgress(pct),
-      );
-      setDraftScheduleText(parsed.rawText.trim());
-    } catch {
-      setOcrError('Não foi possível ler o texto automaticamente. Cole ou edite o texto abaixo.');
-    } finally {
-      setOcrLoading(false);
-    }
-  };
+  // Live checklist of what already arrived (songs + media per schedule time)
+  const checklist = useMemo(() => {
+    return sortedRunItems.map((item) => {
+      if (item.itemType === 'WORSHIP' || item.songCode) {
+        const matchedSong =
+          state.songs.find((s) => s.songCode && s.songCode === item.songCode) ||
+          findMatchingSong(item.title, state.songs);
+        const ready = Boolean(matchedSong && matchedSong.rawLyrics.trim().length > 0);
+        return {
+          item,
+          kind: 'SONG' as const,
+          ready,
+          detail: ready
+            ? `Chegou: ${matchedSong!.title} (letra pronta)`
+            : 'Aguardando Música enviar letra',
+        };
+      }
 
-  const handleApplyParsedSchedule = () => {
-    setOcrError(null);
-    setImportSuccessMsg(null);
-    const textToParse = draftScheduleText.trim();
-    if (!textToParse) {
-      setOcrError('Suba a imagem do roteiro ou cole as linhas antes de enviar.');
-      return;
-    }
+      if (item.requiresMedia) {
+        const directMedia = state.mediaAssets.find((m) => m.runItemId === item.id);
+        const triggerFallback = !directMedia
+          ? state.mediaAssets.find(
+              (m) =>
+                (item.title.toLowerCase().includes('arranque') && m.displayTrigger === 'ARRANQUE') ||
+                (item.title.toLowerCase().includes('esquete') && m.displayTrigger === 'ESQUETE') ||
+                (item.title.toLowerCase().includes('brincadeira') && m.displayTrigger === 'BRINCADEIRA'),
+            )
+          : undefined;
+        const found = directMedia ?? triggerFallback;
+        return {
+          item,
+          kind: 'MEDIA' as const,
+          ready: Boolean(found),
+          detail: found
+            ? `Chegou: ${found.normalizedFilename}`
+            : 'Aguardando enviar mídia para este horário',
+        };
+      }
 
-    const parsed = parseScheduleText(
-      textToParse,
-      `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
-      activeUserName,
-    );
+      return {
+        item,
+        kind: 'INFO' as const,
+        ready: true,
+        detail: item.itemType === 'CLOSING' ? 'Encerramento registrado' : 'Horário registrado',
+      };
+    });
+  }, [sortedRunItems, state.songs, state.mediaAssets]);
 
-    if (parsed.runItems.length === 0) {
-      setOcrError('Nenhuma linha de horário encontrada (ex.: 19h00 – Vídeo Nova Jovens 2 (1min)).');
-      return;
-    }
+  const requiredChecklistCount = checklist.filter((c) => c.kind !== 'INFO').length;
+  const completedChecklistCount = checklist.filter((c) => c.kind !== 'INFO' && c.ready).length;
 
-    onReplaceScheduleFromImport({
-      runItems: parsed.runItems,
-      detectedSongs: parsed.detectedSongs,
-      detectedDate: parsed.detectedDate,
-      sourceLabel: scheduleImagePreview ? 'imagem do roteiro' : 'texto do roteiro',
+  const validateAndAcceptPendingFile = async (file: File) => {
+    setUploadError(null);
+    const meta = await readMediaMetadata(file);
+    const check = validateMediaForHolyrics({
+      filename: file.name,
+      fileSizeBytes: file.size,
+      widthPx: meta.widthPx,
+      heightPx: meta.heightPx,
+      screens: state.screens,
     });
 
-    setUploadRunItemId(parsed.runItems[0]?.id ?? '');
-    setImportSuccessMsg(
-      `Roteiro enviado para a Projeção (${parsed.runItems.length} momentos e ${parsed.detectedSongs.length} músicas criadas em Músicas).`,
-    );
-  };
+    if (check.status === 'REJECTED' || !check.category) {
+      setPendingFile(null);
+      setPendingPreviewUrl(null);
+      setUploadError(check.messages[0] ?? 'Arquivo bloqueado por não atender o padrão Holyrics.');
+      return;
+    }
 
-  const handleSelectMediaForPreview = (file: File) => {
-    setUploadError(null);
     const url = URL.createObjectURL(file);
     setPendingFile(file);
     setPendingPreviewUrl(url);
@@ -150,7 +167,7 @@ export function ProgrammingTab({
   const handleConfirmMediaUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingFile) {
-      setUploadError('Selecione um arquivo de mídia primeiro para testar nos telões.');
+      setUploadError('Importe um arquivo válido primeiro no telão ou abaixo.');
       return;
     }
     if (displayTrigger === 'ON_REQUEST' && !requestedBy.trim()) {
@@ -169,7 +186,7 @@ export function ProgrammingTab({
     });
 
     if (!check.category || check.status === 'REJECTED') {
-      setUploadError(check.messages[0] ?? 'Formato não aceito pelo Holyrics.');
+      setUploadError(check.messages[0] ?? 'Arquivo bloqueado pelo padrão Holyrics.');
       return;
     }
 
@@ -215,6 +232,71 @@ export function ProgrammingTab({
     setMediaNote('');
   };
 
+  const handleScheduleImageUpload = async (file: File) => {
+    setOcrError(null);
+    setImportSuccessMsg(null);
+    setScheduleImagePreview(URL.createObjectURL(file));
+    setOcrLoading(true);
+    setOcrProgress(0);
+
+    try {
+      const parsed = await readScheduleFromImage(
+        file,
+        `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
+        activeUserName,
+        (pct) => setOcrProgress(pct),
+      );
+      setDraftScheduleText(parsed.rawText.trim());
+    } catch {
+      setOcrError('Não foi possível ler o texto automaticamente. Cole ou edite o texto abaixo.');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleApplyParsedSchedule = () => {
+    setOcrError(null);
+    setImportSuccessMsg(null);
+    const textToParse = draftScheduleText.trim();
+    if (!textToParse) {
+      setOcrError('Suba a imagem do roteiro ou cole as linhas antes de enviar.');
+      return;
+    }
+
+    const parsed = parseScheduleText(
+      textToParse,
+      `Equipe ${TEAM_LABELS[state.programmingTeam].name}`,
+      activeUserName,
+    );
+
+    if (parsed.runItems.length === 0) {
+      setOcrError('Nenhuma linha de horário encontrada (ex.: 19h00 – Vídeo Nova Jovens 2 (1min)).');
+      return;
+    }
+
+    const usedIds = new Set<string>();
+    let matchedCount = 0;
+    for (const det of parsed.detectedSongs) {
+      const match = findMatchingSong(det.title, state.songs, usedIds);
+      if (match && match.rawLyrics.trim().length > 0) {
+        usedIds.add(match.id);
+        matchedCount += 1;
+      }
+    }
+
+    onReplaceScheduleFromImport({
+      runItems: parsed.runItems,
+      detectedSongs: parsed.detectedSongs,
+      detectedDate: parsed.detectedDate,
+      sourceLabel: scheduleImagePreview ? 'imagem do roteiro' : 'texto do roteiro',
+    });
+
+    setUploadRunItemId(parsed.runItems[0]?.id ?? '');
+    setImportSuccessMsg(
+      `Horários gravados (${parsed.runItems.length} momentos). Músicas já prontas no checklist: ${matchedCount}/${parsed.detectedSongs.length}.`,
+    );
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
@@ -223,7 +305,7 @@ export function ProgrammingTab({
             Programação e Mídias
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Importe a imagem do roteiro, teste as mídias nos três telões e defina quando cada arquivo entra no culto.
+            Confira os formatos aceitos, importe e teste as mídias nos telões e acompanhe o checklist de horários.
           </p>
         </div>
 
@@ -246,114 +328,57 @@ export function ProgrammingTab({
         </div>
       </div>
 
-      {/* PASSO 1: Ler imagem semanal do roteiro (OCR) */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-white">
-              1. Importar imagem do roteiro da semana
-            </h2>
-            <p className="mt-0.5 text-sm text-zinc-400">
-              Suba a imagem com os horários (ex.: 19h00 – Vídeo, M1, Arranque...). O sistema lê tudo e já cria as músicas M1..M4 automaticamente.
-            </p>
-          </div>
+      {/* 1. FORMATOS ACEITOS NO TOPO (SEM LETRAS .TXT) */}
+      <section className="rounded-xl border border-white/10 bg-[#12141A]">
+        <button
+          type="button"
+          onClick={() => setShowSpecs((v) => !v)}
+          className="flex min-h-[52px] w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-white"
+        >
+          <span className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-[#F5C41E]" />
+            <span>Formatos aceitos e padrão dos telões (arquivos errados são bloqueados)</span>
+          </span>
+          <span className="text-xs text-[#0095FF]">{showSpecs ? 'Ocultar' : 'Mostrar'}</span>
+        </button>
 
-          <div className="flex flex-wrap gap-2">
-            <label
-              className={`inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] ${
-                !canEditProgramming || state.isFrozen ? 'pointer-events-none opacity-45' : ''
-              }`}
-            >
-              <FileImage className="h-4 w-4" />
-              <span>Ler imagem do roteiro</span>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={!canEditProgramming || state.isFrozen}
-                className="sr-only"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleScheduleImageUpload(f);
-                  e.target.value = '';
-                }}
-              />
-            </label>
-
-            <button
-              type="button"
-              disabled={!canEditProgramming || state.isFrozen}
-              onClick={() => setDraftScheduleText(SAMPLE_SCHEDULE_TEXT)}
-              className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-45"
-            >
-              Carregar exemplo 21/11
-            </button>
-          </div>
-        </div>
-
-        {ocrLoading && (
-          <div className="mt-4 flex items-center gap-2.5 rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 p-3 text-sm text-white">
-            <Loader2 className="h-4 w-4 animate-spin text-[#0095FF]" />
-            <span>Lendo imagem do roteiro... {ocrProgress}%</span>
-          </div>
-        )}
-
-        {(draftScheduleText || scheduleImagePreview) && (
-          <div className="mt-4 grid gap-4 lg:grid-cols-12">
-            {scheduleImagePreview && (
-              <div className="lg:col-span-4">
-                <img
-                  src={scheduleImagePreview}
-                  alt="Imagem do roteiro importada"
-                  className="max-h-72 w-full rounded-lg border border-white/10 bg-black object-contain"
-                />
-              </div>
-            )}
-
-            <div className={scheduleImagePreview ? 'lg:col-span-8' : 'lg:col-span-12'}>
-              <label htmlFor="ocr-text" className="block text-sm font-medium text-zinc-300">
-                Texto lido do roteiro (confira ou ajuste qualquer linha antes de enviar)
-              </label>
-              <textarea
-                id="ocr-text"
-                rows={7}
-                value={draftScheduleText}
-                onChange={(e) => setDraftScheduleText(e.target.value)}
-                className="font-mono-tech mt-1.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-sm text-white focus:border-[#0095FF] focus:outline-none"
-              />
-              <button
-                type="button"
-                disabled={!canEditProgramming || state.isFrozen}
-                onClick={handleApplyParsedSchedule}
-                className="mt-3 min-h-[44px] rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-45"
+        {showSpecs && (
+          <div className="grid gap-3 border-t border-white/10 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            {HOLYRICS_SPECS.map((spec) => (
+              <div
+                key={spec.category}
+                className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3.5 space-y-1.5"
               >
-                Enviar roteiro para Projeção e Música
-              </button>
-            </div>
+                <div className="text-sm font-semibold text-white">{spec.title}</div>
+                <div className="font-mono-tech text-xs text-[#38BDF8]">
+                  {spec.acceptedExtensions.join(' ')}
+                </div>
+                <p className="text-xs font-medium text-zinc-200">{spec.resolutionRule}</p>
+                <p className="text-xs text-zinc-400">{spec.notes}</p>
+              </div>
+            ))}
           </div>
-        )}
-
-        {ocrError && <p className="mt-3 text-sm text-red-400">{ocrError}</p>}
-        {importSuccessMsg && (
-          <p className="mt-3 text-sm text-emerald-400">{importSuccessMsg}</p>
         )}
       </section>
 
-      {/* PASSO 2: Preview nos 3 Telões + Enviar Mídia com Nota e Gatilho */}
-      <div className="space-y-4">
+      {/* 2. TELÃO NO TOPO + ENVIO COM BLOQUEIO IMEDIATO */}
+      <section className="space-y-5">
         <StageSimulator
           screens={state.screens}
           initialUrl={pendingPreviewUrl ?? undefined}
           initialFilename={pendingFile?.name}
+          onFilePicked={(f) => {
+            void validateAndAcceptPendingFile(f);
+          }}
         />
 
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* Upload Form with Nota + Quando Exibir */}
           <form
             onSubmit={(e) => void handleConfirmMediaUpload(e)}
             className="space-y-4 rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6"
           >
             <h2 className="text-base font-semibold text-white">
-              2. Enviar mídia para a Projeção
+              Enviar mídia testada para a Projeção
             </h2>
 
             <label
@@ -366,8 +391,8 @@ export function ProgrammingTab({
               <FileUp className="h-5 w-5 text-[#0095FF]" />
               <span className="mt-1 text-sm font-medium text-white">
                 {pendingFile
-                  ? `Selecionado: ${pendingFile.name} (já no simulador acima)`
-                  : 'Escolher arquivo (vídeo, imagem, áudio ou PDF)'}
+                  ? `Pronto no telão: ${pendingFile.name}`
+                  : 'Escolher arquivo (vídeo 16:9, imagem 16:9, áudio ou PDF)'}
               </span>
               <input
                 type="file"
@@ -375,7 +400,8 @@ export function ProgrammingTab({
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) handleSelectMediaForPreview(f);
+                  if (f) void validateAndAcceptPendingFile(f);
+                  e.target.value = '';
                 }}
               />
             </label>
@@ -466,8 +492,8 @@ export function ProgrammingTab({
             </div>
 
             {uploadError && (
-              <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/45 bg-red-500/12 p-3 text-sm text-red-200">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
                 <span>{uploadError}</span>
               </div>
             )}
@@ -481,10 +507,10 @@ export function ProgrammingTab({
             </button>
           </form>
 
-          {/* Media Queue sent to Projection */}
+          {/* Lista de mídias já enviadas */}
           <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-6">
             <h2 className="text-base font-semibold text-white">
-              Mídias enviadas para a Projeção ({state.mediaAssets.length})
+              Mídias enviadas ({state.mediaAssets.length})
             </h2>
 
             <div className="mt-4 divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
@@ -564,42 +590,151 @@ export function ProgrammingTab({
             </div>
           </section>
         </div>
-      </div>
+      </section>
 
-      {/* Collapsible Holyrics Specs */}
-      <div className="rounded-xl border border-white/10 bg-[#12141A]">
-        <button
-          type="button"
-          onClick={() => setShowSpecs((v) => !v)}
-          className="flex min-h-[52px] w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-white"
-        >
-          <span className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-[#F5C41E]" />
-            <span>Formatos aceitos pelo Holyrics</span>
-          </span>
-          <span className="text-xs text-[#0095FF]">{showSpecs ? 'Ocultar' : 'Ver'}</span>
-        </button>
+      {/* 3. IMPORTAR ROTEIRO E CHECKLIST AO VIVO DO QUE JÁ CHEGOU */}
+      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-white">
+              Roteiro e Checklist do que já chegou
+            </h2>
+            <p className="mt-0.5 text-sm text-zinc-400">
+              Suba a imagem do roteiro semanal. O sistema grava os horários e marca em verde o que já chegou (músicas e mídias).
+            </p>
+          </div>
 
-        {showSpecs && (
-          <div className="divide-y divide-white/8 border-t border-white/10">
-            {HOLYRICS_SPECS.map((spec) => (
-              <div key={spec.category} className="grid gap-2 p-4 sm:grid-cols-12">
-                <div className="sm:col-span-3">
-                  <div className="text-sm font-semibold text-white">{spec.title}</div>
-                  <div className="font-mono-tech mt-1 text-xs text-[#38BDF8]">
-                    {spec.acceptedExtensions.join(' ')}
+          <div className="flex flex-wrap gap-2">
+            <label
+              className={`inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] ${
+                !canEditProgramming || state.isFrozen ? 'pointer-events-none opacity-45' : ''
+              }`}
+            >
+              <FileImage className="h-4 w-4" />
+              <span>Ler imagem do roteiro</span>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={!canEditProgramming || state.isFrozen}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleScheduleImageUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled={!canEditProgramming || state.isFrozen}
+              onClick={() => setDraftScheduleText(SAMPLE_SCHEDULE_TEXT)}
+              className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-45"
+            >
+              Carregar exemplo 21/11
+            </button>
+          </div>
+        </div>
+
+        {ocrLoading && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 p-3 text-sm text-white">
+            <Loader2 className="h-4 w-4 animate-spin text-[#0095FF]" />
+            <span>Lendo imagem do roteiro... {ocrProgress}%</span>
+          </div>
+        )}
+
+        {(draftScheduleText || scheduleImagePreview) && (
+          <div className="grid gap-4 lg:grid-cols-12">
+            {scheduleImagePreview && (
+              <div className="lg:col-span-4">
+                <img
+                  src={scheduleImagePreview}
+                  alt="Imagem do roteiro importada"
+                  className="max-h-72 w-full rounded-lg border border-white/10 bg-black object-contain"
+                />
+              </div>
+            )}
+
+            <div className={scheduleImagePreview ? 'lg:col-span-8' : 'lg:col-span-12'}>
+              <label htmlFor="ocr-text" className="block text-sm font-medium text-zinc-300">
+                Horários detectados (confira ou ajuste antes de gravar)
+              </label>
+              <textarea
+                id="ocr-text"
+                rows={6}
+                value={draftScheduleText}
+                onChange={(e) => setDraftScheduleText(e.target.value)}
+                className="font-mono-tech mt-1.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-sm text-white focus:border-[#0095FF] focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={!canEditProgramming || state.isFrozen}
+                onClick={handleApplyParsedSchedule}
+                className="mt-3 min-h-[44px] rounded-lg bg-[#0095FF] px-5 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-45"
+              >
+                Gravar horários e validar checklist
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ocrError && <p className="text-sm text-red-400">{ocrError}</p>}
+        {importSuccessMsg && <p className="text-sm text-emerald-400">{importSuccessMsg}</p>}
+
+        {/* Checklist verde em tempo real */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-white">
+              Checklist dos horários ({completedChecklistCount}/{requiredChecklistCount} itens prontos)
+            </h3>
+            <span className="font-mono-tech text-xs text-zinc-400">
+              {completedChecklistCount === requiredChecklistCount
+                ? 'Tudo verde para o culto'
+                : 'Vai ficando verde conforme músicas e mídias chegam'}
+            </span>
+          </div>
+
+          <div className="divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
+            {checklist.map(({ item, kind, ready, detail }) => (
+              <div
+                key={item.id}
+                className={`flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between ${
+                  kind !== 'INFO' && ready ? 'bg-emerald-500/[0.06]' : ''
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="font-mono-tech shrink-0 rounded border border-white/10 bg-[#12141A] px-2 py-0.5 text-xs font-semibold text-zinc-200">
+                    {item.plannedTime}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-white">{item.title}</div>
+                    <div className="truncate text-xs text-zinc-400">{detail}</div>
                   </div>
                 </div>
-                <div className="text-sm text-zinc-300 sm:col-span-4">
-                  <div>{spec.recommended}</div>
-                  <div className="mt-0.5 text-xs text-zinc-400">{spec.resolutionRule}</div>
+
+                <div className="shrink-0">
+                  {kind === 'INFO' ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2.5 py-1 text-xs text-zinc-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>Horário salvo</span>
+                    </span>
+                  ) : ready ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/35 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>{kind === 'SONG' ? 'Música OK' : 'Mídia OK'}</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[#F5C41E]/35 bg-[#F5C41E]/10 px-2.5 py-1 text-xs font-medium text-[#F5C41E]">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span>{kind === 'SONG' ? 'Falta letra' : 'Falta mídia'}</span>
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-zinc-400 sm:col-span-5">{spec.notes}</div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

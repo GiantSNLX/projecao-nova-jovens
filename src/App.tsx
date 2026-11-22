@@ -7,18 +7,22 @@ import type {
   AttendanceStatus,
   AuditLogEntry,
   DeskAssignment,
+  DeskPosition,
   MdoEntry,
   MediaAsset,
   MemberUser,
   ProgrammingTeam,
+  Role,
   RunItem,
   SaturdaySchedule,
   SaturdayVerseRecord,
+  ScheduleLocationType,
   ScreenCode,
   ServiceSong,
   ServiceState,
   TabId,
 } from './types/portal';
+import { findMatchingSong } from './utils/scheduleOcr';
 import { LoginScreen } from './components/LoginScreen';
 import { Header } from './components/Header';
 import { MobileNav } from './components/MobileNav';
@@ -27,10 +31,10 @@ import { MusicTab } from './components/MusicTab';
 import { ProgrammingTab } from './components/ProgrammingTab';
 import { CultoTab } from './components/CultoTab';
 import { DevotionalTab } from './components/DevotionalTab';
-import { EscalasTab } from './components/EscalasTab';
-import { ConfiguracoesTab } from './components/ConfiguracoesTab';
+import { EscalasTab, type NewSchedulePayload } from './components/EscalasTab';
+import { ConfiguracoesTab, type NewUserPayload } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v6';
+const STORAGE_KEY = 'projecao-nova-jovens-v8';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
@@ -41,34 +45,70 @@ function loadInitialState(): ServiceState {
     if (!parsed || !parsed.screens || !parsed.assignments || !parsed.schedules) {
       return INITIAL_SERVICE_STATE;
     }
-    return parsed;
+    return {
+      ...INITIAL_SERVICE_STATE,
+      ...parsed,
+      members: parsed.members && parsed.members.length > 0 ? parsed.members : INITIAL_MEMBERS,
+      activeScheduleId: parsed.activeScheduleId || INITIAL_SERVICE_STATE.activeScheduleId,
+    };
   } catch {
     return INITIAL_SERVICE_STATE;
   }
 }
 
-function loadSessionUser(): MemberUser | null {
+function loadSessionUser(membersList: MemberUser[]): MemberUser | null {
   try {
     const userId = localStorage.getItem(SESSION_KEY);
     if (!userId) return null;
-    return INITIAL_MEMBERS.find((m) => m.id === userId) ?? null;
+    return membersList.find((m) => m.id === userId) ?? null;
   } catch {
     return null;
   }
 }
 
-function addSevenDays(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d + 7));
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getUTCDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
+const AUDITORIO_POSITIONS: DeskPosition[] = [
+  'CAPITAO',
+  'PRINCIPAL',
+  'RETORNO',
+  'CORTE',
+  'STUDIO',
+  'APOIO',
+];
+
+const ROOM_POSITIONS: DeskPosition[] = ['PRINCIPAL', 'RETORNO'];
+
+function buildAssignmentsForPositions(
+  positions: DeskPosition[],
+  existing: DeskAssignment[],
+  membersList: MemberUser[],
+  prefix: string,
+): DeskAssignment[] {
+  const defaultMap: Record<DeskPosition, string> = {
+    CAPITAO: membersList[0]?.id ?? 'usr-1',
+    PRINCIPAL: membersList[2]?.id ?? membersList[0]?.id ?? 'usr-3',
+    RETORNO: membersList[3]?.id ?? membersList[0]?.id ?? 'usr-4',
+    CORTE: membersList[4]?.id ?? membersList[0]?.id ?? 'usr-5',
+    STUDIO: membersList[9]?.id ?? membersList[0]?.id ?? 'usr-10',
+    APOIO: membersList[1]?.id ?? membersList[0]?.id ?? 'usr-2',
+  };
+  return positions.map((pos, idx) => {
+    const prev = existing.find((e) => e.position === pos);
+    if (prev) return prev;
+    return {
+      id: `${prefix}-${pos.toLowerCase()}-${idx}`,
+      position: pos,
+      userId: defaultMap[pos],
+      attendanceStatus: 'PENDING',
+      servingOnDesk: false,
+    };
+  });
 }
 
 export function App() {
   const [state, setState] = useState<ServiceState>(loadInitialState);
-  const [activeUser, setActiveUser] = useState<MemberUser | null>(loadSessionUser);
+  const [activeUser, setActiveUser] = useState<MemberUser | null>(() =>
+    loadSessionUser(loadInitialState().members),
+  );
   const [activeTab, setActiveTab] = useState<TabId>('inicio');
 
   const uploadedFilesRef = useRef<Map<string, File>>(new Map());
@@ -88,7 +128,7 @@ export function App() {
   if (!activeUser) {
     return (
       <LoginScreen
-        members={INITIAL_MEMBERS}
+        members={state.members}
         onLoginSuccess={(member) => {
           setActiveUser(member);
           setActiveTab('inicio');
@@ -145,13 +185,15 @@ export function App() {
 
   const updateScheduleAssignments = (
     prev: ServiceState,
-    scheduleDate: string,
+    scheduleId: string,
     updater: (asgs: DeskAssignment[]) => DeskAssignment[],
   ): { schedules: SaturdaySchedule[]; assignments: DeskAssignment[] } => {
     const schedules = prev.schedules.map((s) =>
-      s.date === scheduleDate ? { ...s, assignments: updater(s.assignments) } : s,
+      s.id === scheduleId ? { ...s, assignments: updater(s.assignments) } : s,
     );
-    const current = schedules.find((s) => s.date === prev.serviceDate);
+    const current =
+      schedules.find((s) => s.id === prev.activeScheduleId) ??
+      schedules.find((s) => s.date === prev.serviceDate);
     return {
       schedules,
       assignments: current ? current.assignments : prev.assignments,
@@ -159,14 +201,14 @@ export function App() {
   };
 
   const handleUpdateAttendance = (
-    scheduleDate: string,
+    scheduleId: string,
     assignmentId: string,
     status: AttendanceStatus,
   ) => {
     setState((prev) => {
-      const targetSched = prev.schedules.find((s) => s.date === scheduleDate);
+      const targetSched = prev.schedules.find((s) => s.id === scheduleId);
       const target = targetSched?.assignments.find((a) => a.id === assignmentId);
-      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+      const updated = updateScheduleAssignments(prev, scheduleId, (list) =>
         list.map((a) =>
           a.id === assignmentId
             ? {
@@ -183,7 +225,7 @@ export function App() {
         auditLogs: [
           makeAudit(
             'Presença',
-            `confirmou ${status === 'CONFIRMED' ? 'presença' : 'ausência'} em ${target?.position ?? ''} (${scheduleDate}).`,
+            `confirmou ${status === 'CONFIRMED' ? 'presença' : 'ausência'} em ${target?.position ?? ''} (${targetSched?.date ?? ''}).`,
           ),
           ...prev.auditLogs,
         ],
@@ -191,12 +233,12 @@ export function App() {
     });
   };
 
-  const handleToggleServingOnDesk = (scheduleDate: string, assignmentId: string) => {
+  const handleToggleServingOnDesk = (scheduleId: string, assignmentId: string) => {
     setState((prev) => {
-      const targetSched = prev.schedules.find((s) => s.date === scheduleDate);
+      const targetSched = prev.schedules.find((s) => s.id === scheduleId);
       const target = targetSched?.assignments.find((a) => a.id === assignmentId);
       const nextServing = !target?.servingOnDesk;
-      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+      const updated = updateScheduleAssignments(prev, scheduleId, (list) =>
         list.map((a) =>
           a.id === assignmentId
             ? {
@@ -223,13 +265,14 @@ export function App() {
   };
 
   const handleChangeAssignmentMember = (
-    scheduleDate: string,
+    scheduleId: string,
     assignmentId: string,
     userId: string,
   ) => {
-    const member = INITIAL_MEMBERS.find((m) => m.id === userId);
+    const member = state.members.find((m) => m.id === userId);
     setState((prev) => {
-      const updated = updateScheduleAssignments(prev, scheduleDate, (list) =>
+      const targetSched = prev.schedules.find((s) => s.id === scheduleId);
+      const updated = updateScheduleAssignments(prev, scheduleId, (list) =>
         list.map((a) =>
           a.id === assignmentId
             ? {
@@ -246,7 +289,7 @@ export function App() {
         ...prev,
         ...updated,
         auditLogs: [
-          makeAudit('Escala', `escalou ${member?.name ?? userId} para ${scheduleDate}.`),
+          makeAudit('Escala', `escalou ${member?.name ?? userId} para ${targetSched?.title ?? scheduleId}.`),
           ...prev.auditLogs,
         ],
       };
@@ -264,52 +307,132 @@ export function App() {
     }));
   };
 
-  const handleAddNextSaturday = () => {
+  const handleAddSchedule = (payload: NewSchedulePayload): string => {
+    const newId = `sch-${Date.now()}`;
+    const positions =
+      payload.locationType === 'SALA' ? ROOM_POSITIONS : AUDITORIO_POSITIONS;
+    const newSched: SaturdaySchedule = {
+      id: newId,
+      date: payload.date,
+      title: payload.title,
+      locationType: payload.locationType,
+      roomName: payload.locationType === 'SALA' ? payload.roomName : undefined,
+      assignments: buildAssignmentsForPositions(positions, [], state.members, newId),
+    };
+
+    setState((prev) => ({
+      ...prev,
+      schedules: [...prev.schedules, newSched],
+      auditLogs: [
+        makeAudit(
+          'Escala',
+          `criou evento "${payload.title}" (${payload.date}) em ${payload.locationType === 'SALA' ? payload.roomName || 'Sala' : 'Auditório Principal'}.`,
+        ),
+        ...prev.auditLogs,
+      ],
+    }));
+    return newId;
+  };
+
+  const handleToggleArchiveSchedule = (scheduleId: string, archived: boolean) => {
     setState((prev) => {
-      const sorted = prev.schedules.slice().sort((a, b) => a.date.localeCompare(b.date));
-      const last = sorted[sorted.length - 1];
-      const nextDate = addSevenDays(last?.date ?? prev.serviceDate);
-
-      const newSched: SaturdaySchedule = {
-        date: nextDate,
-        title: `Culto ${nextDate.split('-').reverse().join('/')}`,
-        assignments: [
-          { id: `s-${nextDate}-1`, position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-2`, position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-3`, position: 'RETORNO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-4`, position: 'CORTE', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-5`, position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-6`, position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
-        ],
-      };
-
+      const target = prev.schedules.find((s) => s.id === scheduleId);
+      const schedules = prev.schedules.map((s) =>
+        s.id === scheduleId ? { ...s, isPast: archived } : s,
+      );
       return {
         ...prev,
-        schedules: [...prev.schedules, newSched],
+        schedules,
         auditLogs: [
-          makeAudit('Escala', `criou escala do sábado ${nextDate}.`),
+          makeAudit(
+            'Escala',
+            `${archived ? 'arquivou' : 'reativou'} o culto "${target?.title ?? scheduleId}".`,
+          ),
           ...prev.auditLogs,
         ],
       };
     });
   };
 
-  const handleUpdateScheduleTitle = (scheduleDate: string, title: string) => {
-    setState((prev) => ({
-      ...prev,
-      title: scheduleDate === prev.serviceDate ? title : prev.title,
-      schedules: prev.schedules.map((s) =>
-        s.date === scheduleDate ? { ...s, title } : s,
-      ),
-    }));
+  const handleUpdateScheduleDetails = (
+    scheduleId: string,
+    patch: { title?: string; locationType?: ScheduleLocationType; roomName?: string },
+  ) => {
+    setState((prev) => {
+      const schedules = prev.schedules.map((s) => {
+        if (s.id !== scheduleId) return s;
+        const nextLocation = patch.locationType ?? s.locationType;
+        let nextAssignments = s.assignments;
+
+        if (patch.locationType && patch.locationType !== s.locationType) {
+          const targetPositions =
+            nextLocation === 'SALA' ? ROOM_POSITIONS : AUDITORIO_POSITIONS;
+          nextAssignments = buildAssignmentsForPositions(
+            targetPositions,
+            s.assignments,
+            prev.members,
+            s.id,
+          );
+        }
+
+        return {
+          ...s,
+          title: patch.title !== undefined ? patch.title : s.title,
+          locationType: nextLocation,
+          roomName:
+            nextLocation === 'SALA'
+              ? patch.roomName !== undefined
+                ? patch.roomName
+                : s.roomName
+              : undefined,
+          assignments: nextAssignments,
+        };
+      });
+
+      const current = schedules.find((s) => s.id === prev.activeScheduleId);
+      return {
+        ...prev,
+        title:
+          patch.title !== undefined && scheduleId === prev.activeScheduleId
+            ? patch.title
+            : prev.title,
+        schedules,
+        assignments: current ? current.assignments : prev.assignments,
+      };
+    });
   };
 
-  const handleSelectServiceDate = (date: string) => {
+  const handleTogglePositionInSchedule = (scheduleId: string, position: DeskPosition) => {
     setState((prev) => {
-      const found = prev.schedules.find((s) => s.date === date);
+      const schedules = prev.schedules.map((s) => {
+        if (s.id !== scheduleId) return s;
+        const exists = s.assignments.some((a) => a.position === position);
+        const nextAssignments = exists
+          ? s.assignments.filter((a) => a.position !== position)
+          : buildAssignmentsForPositions(
+              [...s.assignments.map((a) => a.position), position],
+              s.assignments,
+              prev.members,
+              s.id,
+            );
+        return { ...s, assignments: nextAssignments };
+      });
+      const current = schedules.find((s) => s.id === prev.activeScheduleId);
+      return {
+        ...prev,
+        schedules,
+        assignments: current ? current.assignments : prev.assignments,
+      };
+    });
+  };
+
+  const handleSelectSchedule = (scheduleId: string) => {
+    setState((prev) => {
+      const found = prev.schedules.find((s) => s.id === scheduleId);
       if (!found) return prev;
       return {
         ...prev,
+        activeScheduleId: found.id,
         serviceDate: found.date,
         title: found.title,
         assignments: found.assignments,
@@ -324,26 +447,126 @@ export function App() {
     sourceLabel: string;
   }) => {
     setState((prev) => {
-      const mergedSongs: ServiceSong[] = params.detectedSongs.map((ds) => {
-        const existing = prev.songs.find(
-          (es) =>
-            (es.songCode && es.songCode === ds.songCode) ||
-            es.title.toLowerCase() === ds.title.toLowerCase(),
-        );
-        return existing ? { ...existing, songCode: ds.songCode, orderIndex: ds.orderIndex } : ds;
+      const usedExistingIds = new Set<string>();
+      const mergedFromSchedule: ServiceSong[] = params.detectedSongs.map((ds) => {
+        const matched = findMatchingSong(ds.title, prev.songs, usedExistingIds);
+        if (matched) {
+          usedExistingIds.add(matched.id);
+          return {
+            ...matched,
+            songCode: ds.songCode,
+            orderIndex: ds.orderIndex,
+            validatedBySchedule: matched.rawLyrics.trim().length > 0,
+          };
+        }
+        return { ...ds, validatedBySchedule: false };
       });
+
+      const unmatchedPreUploaded = prev.songs
+        .filter((s) => !usedExistingIds.has(s.id) && s.rawLyrics.trim().length > 0)
+        .map((s, idx) => ({
+          ...s,
+          orderIndex: mergedFromSchedule.length + idx + 1,
+          validatedBySchedule: false,
+        }));
+
+      const finalSongs = [...mergedFromSchedule, ...unmatchedPreUploaded];
 
       return {
         ...prev,
         serviceDate: params.detectedDate || prev.serviceDate,
         startsAtTime: params.runItems[0]?.plannedTime || prev.startsAtTime,
         runItems: params.runItems,
-        songs: mergedSongs.length > 0 ? mergedSongs : prev.songs,
+        songs: finalSongs.length > 0 ? finalSongs : prev.songs,
         auditLogs: [
           makeAudit(
             'Roteiro',
-            `importou ${params.runItems.length} momentos via ${params.sourceLabel}.`,
+            `importou ${params.runItems.length} momentos via ${params.sourceLabel} e validou músicas.`,
           ),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  const handleAddMember = (payload: NewUserPayload): { ok: boolean; error?: string } => {
+    if (!payload.name || !payload.senibId || !payload.pin) {
+      return { ok: false, error: 'Preencha nome, matrícula SENIB e PIN.' };
+    }
+    const duplicate = state.members.some((m) => m.senibId === payload.senibId);
+    if (duplicate) {
+      return { ok: false, error: `Matrícula SENIB ${payload.senibId} já cadastrada.` };
+    }
+
+    let roles: Role[] = ['MEMBER'];
+    let ministry = 'Projeção';
+    let programmingTeam: ProgrammingTeam | undefined = undefined;
+
+    if (payload.ministryChoice === 'MUSICA') {
+      roles = ['MUSIC', 'MEMBER'];
+      ministry = 'Música';
+    } else if (payload.ministryChoice === 'PROGRAMACAO') {
+      programmingTeam = payload.programmingTeam || 'ALPHA';
+      const label = programmingTeam === 'ALPHA' ? 'Alpha' : programmingTeam === 'BRAVO' ? 'Bravo' : 'Charlie';
+      roles = ['PROGRAMMING', 'MEMBER'];
+      ministry = `Programação ${label}`;
+    } else {
+      roles = payload.isCaptain ? ['CAPTAIN', 'MEMBER'] : ['MEMBER'];
+      ministry = payload.isLeader ? 'Liderança / Projeção' : 'Projeção';
+    }
+
+    if (payload.isLeader && !roles.includes('ADMIN')) {
+      roles = ['ADMIN', ...roles];
+    }
+
+    const newMember: MemberUser = {
+      id: `usr-${Date.now()}`,
+      senibId: payload.senibId,
+      pin: payload.pin,
+      name: payload.name,
+      ministry,
+      roles,
+      programmingTeam,
+      active: true,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      members: [...prev.members, newMember],
+      auditLogs: [
+        makeAudit('Configurações', `cadastrou usuário ${newMember.name} (${newMember.ministry}).`),
+        ...prev.auditLogs,
+      ],
+    }));
+    return { ok: true };
+  };
+
+  const handleUpdateMember = (userId: string, updater: (m: MemberUser) => MemberUser) => {
+    setState((prev) => {
+      const nextMembers = prev.members.map((m) => (m.id === userId ? updater(m) : m));
+      const updatedTarget = nextMembers.find((m) => m.id === userId);
+      if (updatedTarget && activeUser.id === userId) {
+        setActiveUser(updatedTarget);
+      }
+      return {
+        ...prev,
+        members: nextMembers,
+        auditLogs: [
+          makeAudit('Configurações', `atualizou permissões de ${updatedTarget?.name ?? userId}.`),
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  const handleRemoveMember = (userId: string) => {
+    setState((prev) => {
+      const removed = prev.members.find((m) => m.id === userId);
+      return {
+        ...prev,
+        members: prev.members.filter((m) => m.id !== userId),
+        auditLogs: [
+          makeAudit('Configurações', `removeu usuário ${removed?.name ?? userId}.`),
           ...prev.auditLogs,
         ],
       };
@@ -419,8 +642,26 @@ export function App() {
   };
 
   const handleSaveOrAddSong = (song: ServiceSong) => {
-    const cleanSong: ServiceSong = { ...song, adjustmentRequest: undefined };
     setState((prev) => {
+      const worshipSlots = prev.runItems
+        .filter((r) => r.itemType === 'WORSHIP')
+        .map((r, idx) => ({
+          id: r.id,
+          orderIndex: idx + 1,
+          songCode: r.songCode,
+          title: r.title,
+          rawLyrics: '',
+          holyricsTxt: '',
+          approved: false,
+          addedBy: 'Roteiro',
+        }));
+      const matchedSlot = findMatchingSong(song.title, worshipSlots);
+      const cleanSong: ServiceSong = {
+        ...song,
+        adjustmentRequest: undefined,
+        songCode: matchedSlot?.songCode || song.songCode,
+        validatedBySchedule: Boolean(matchedSlot) || song.validatedBySchedule,
+      };
       const exists = prev.songs.some((s) => s.id === cleanSong.id);
       return {
         ...prev,
@@ -563,8 +804,10 @@ export function App() {
           <InicioTab
             state={state}
             activeUser={activeUser}
-            onUpdateAttendance={(id, status) => handleUpdateAttendance(state.serviceDate, id, status)}
-            onToggleServingOnDesk={(id) => handleToggleServingOnDesk(state.serviceDate, id)}
+            onUpdateAttendance={(id, status) =>
+              handleUpdateAttendance(state.activeScheduleId, id, status)
+            }
+            onToggleServingOnDesk={(id) => handleToggleServingOnDesk(state.activeScheduleId, id)}
             onNavigateTab={setActiveTab}
           />
         )}
@@ -599,10 +842,10 @@ export function App() {
         {activeTab === 'culto' && (
           <CultoTab
             state={state}
-            members={INITIAL_MEMBERS}
+            members={state.members}
             canOperateDesk={canOperateDesk}
             uploadedFilesMap={uploadedFilesRef.current}
-            onSelectServiceDate={handleSelectServiceDate}
+            onSelectSchedule={handleSelectSchedule}
             onUpdateLiveNotes={handleUpdateLiveNotes}
             onRequestMediaAdjustment={handleRequestMediaAdjustment}
             onRequestSongAdjustment={handleRequestSongAdjustment}
@@ -614,7 +857,7 @@ export function App() {
           <DevotionalTab
             activeUser={activeUser}
             isLeader={isLeader}
-            members={INITIAL_MEMBERS}
+            members={state.members}
             saturdayDate={state.serviceDate}
             mdoEntries={state.mdoEntries}
             saturdayVerses={state.saturdayVerses}
@@ -626,23 +869,29 @@ export function App() {
         {activeTab === 'escalas' && (
           <EscalasTab
             state={state}
-            members={INITIAL_MEMBERS}
+            members={state.members}
             activeUser={activeUser}
             isLeader={isLeader}
             onUpdateAttendance={handleUpdateAttendance}
             onToggleServingOnDesk={handleToggleServingOnDesk}
             onChangeAssignmentMember={handleChangeAssignmentMember}
-            onUpdateScheduleTitle={handleUpdateScheduleTitle}
-            onAddNextSaturday={handleAddNextSaturday}
+            onUpdateScheduleDetails={handleUpdateScheduleDetails}
+            onTogglePositionInSchedule={handleTogglePositionInSchedule}
+            onAddSchedule={handleAddSchedule}
+            onToggleArchiveSchedule={handleToggleArchiveSchedule}
           />
         )}
 
         {activeTab === 'configuracoes' && (
           <ConfiguracoesTab
             state={state}
+            currentUserId={activeUser.id}
             isLeader={isLeader}
             onUpdateScreen={handleUpdateScreen}
             onToggleFreeze={handleToggleFreeze}
+            onAddMember={handleAddMember}
+            onUpdateMember={handleUpdateMember}
+            onRemoveMember={handleRemoveMember}
             onResetDemo={handleResetDemo}
           />
         )}

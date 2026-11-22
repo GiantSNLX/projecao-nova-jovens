@@ -1,6 +1,5 @@
 import { createWorker } from 'tesseract.js';
 import type { RunItem, RunItemType, ServiceSong } from '../types/portal';
-import { formatLyricsForHolyrics } from './holyrics';
 
 export interface ParsedScheduleResult {
   detectedDate?: string;
@@ -134,17 +133,15 @@ export function parseScheduleText(
     if (songMatch) {
       const songTitle = songMatch[2].trim();
       const songCode = songMatch[1].toUpperCase();
-      const placeholderLyrics = `[Verso 1]\nAguardando Ministério de Música importar a letra de ${songTitle}`;
       detectedSongs.push({
         id: `sng-${Date.now()}-${detectedSongs.length + 1}`,
         songCode,
         orderIndex: detectedSongs.length + 1,
         title: songTitle,
-        artist: '',
-        key: '',
         rawLyrics: '',
-        holyricsTxt: formatLyricsForHolyrics(placeholderLyrics, songTitle, ''),
+        holyricsTxt: '',
         approved: false,
+        validatedBySchedule: false,
         addedBy,
       });
     }
@@ -156,6 +153,99 @@ export function parseScheduleText(
     runItems,
     detectedSongs,
   };
+}
+
+/**
+ * Normaliza nome de música removendo acentos, pontuações, parênteses e palavras curtas comuns
+ * para validar músicas mesmo com pequenas variações entre Música e Roteiro.
+ */
+export function normalizeSongTitle(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^m\d+\s*[:.-]\s*/i, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function similarityTokens(text: string): string[] {
+  const stopWords = new Set(['de', 'do', 'da', 'dos', 'das', 'e', 'a', 'o', 'em', 'por', 'para', 'ao', 'um', 'uma']);
+  return normalizeSongTitle(text)
+    .split(' ')
+    .filter((w) => w.length > 1 && !stopWords.has(w));
+}
+
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+export function findMatchingSong(
+  scheduleSongTitle: string,
+  existingSongs: ServiceSong[],
+  usedIds: Set<string> = new Set(),
+): ServiceSong | undefined {
+  const targetNorm = normalizeSongTitle(scheduleSongTitle);
+  const targetTokens = similarityTokens(scheduleSongTitle);
+  if (!targetNorm) return undefined;
+
+  let bestMatch: ServiceSong | undefined;
+  let bestScore = 0;
+
+  for (const song of existingSongs) {
+    if (usedIds.has(song.id)) continue;
+    const candNorm = normalizeSongTitle(song.title);
+    if (!candNorm) continue;
+
+    if (candNorm === targetNorm) return song;
+
+    let score = 0;
+    if (candNorm.includes(targetNorm) || targetNorm.includes(candNorm)) {
+      const minLen = Math.min(candNorm.length, targetNorm.length);
+      if (minLen >= 4) score = Math.max(score, 0.9);
+    }
+
+    const candTokens = similarityTokens(song.title);
+    if (targetTokens.length > 0 && candTokens.length > 0) {
+      let matchedTokens = 0;
+      for (const tt of targetTokens) {
+        const hit = candTokens.some(
+          (ct) => ct === tt || (tt.length >= 4 && ct.length >= 4 && editDistance(tt, ct) <= 1),
+        );
+        if (hit) matchedTokens += 1;
+      }
+      const ratio = matchedTokens / Math.max(targetTokens.length, candTokens.length);
+      if (ratio >= 0.55 || (matchedTokens >= 2 && matchedTokens / Math.min(targetTokens.length, candTokens.length) >= 0.8)) {
+        score = Math.max(score, ratio);
+      }
+    }
+
+    const maxLen = Math.max(candNorm.length, targetNorm.length);
+    if (maxLen > 0) {
+      const charSim = 1 - editDistance(candNorm, targetNorm) / maxLen;
+      if (charSim >= 0.72) score = Math.max(score, charSim);
+    }
+
+    if (score > bestScore && score >= 0.55) {
+      bestScore = score;
+      bestMatch = song;
+    }
+  }
+
+  return bestMatch;
 }
 
 /**

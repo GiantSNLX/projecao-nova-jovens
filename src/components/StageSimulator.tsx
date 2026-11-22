@@ -1,28 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Eye,
-  Grid,
-  Pause,
-  Play,
-  Repeat,
-  Upload,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, Pause, Play, Upload, XCircle } from 'lucide-react';
 import type { StageScreen } from '../types/portal';
-import { formatDuration, validateMediaForHolyrics } from '../utils/holyrics';
+import { formatDuration, getExtension, validateMediaForHolyrics } from '../utils/holyrics';
 
 interface StageSimulatorProps {
   screens: StageScreen[];
   initialUrl?: string;
   initialFilename?: string;
+  onFilePicked?: (file: File) => void;
 }
-
-type FitMode = 'contain' | 'cover' | 'blur';
-type StageMode = 'mirror' | 'split';
-type MobileFocus = 'ALL' | 'CENTER' | 'SIDES';
 
 interface LoadedPreviewMedia {
   url: string;
@@ -39,8 +25,6 @@ function drawFrameToCanvas(
   source: HTMLVideoElement | HTMLImageElement | null,
   sourceW: number,
   sourceH: number,
-  fitMode: FitMode,
-  showSafeZone: boolean,
   showLyricsOverlay: boolean,
   screenLabel: string,
   screenResolution: string,
@@ -59,47 +43,14 @@ function drawFrameToCanvas(
   if (source && sourceW > 0 && sourceH > 0) {
     const srcRatio = sourceW / sourceH;
     const dstRatio = cw / ch;
-
-    if (fitMode === 'blur') {
-      ctx.save();
-      ctx.filter = 'blur(20px) brightness(0.42)';
-      let bw = cw;
-      let bh = ch;
-      if (srcRatio > dstRatio) {
-        bw = ch * srcRatio;
-      } else {
-        bh = cw / srcRatio;
-      }
-      ctx.drawImage(source, (cw - bw) / 2, (ch - bh) / 2, bw, bh);
-      ctx.restore();
-
-      let fw = cw;
-      let fh = ch;
-      if (srcRatio > dstRatio) {
-        fh = cw / srcRatio;
-      } else {
-        fw = ch * srcRatio;
-      }
-      ctx.drawImage(source, (cw - fw) / 2, (ch - fh) / 2, fw, fh);
-    } else if (fitMode === 'cover') {
-      let dw = cw;
-      let dh = ch;
-      if (srcRatio > dstRatio) {
-        dw = ch * srcRatio;
-      } else {
-        dh = cw / srcRatio;
-      }
-      ctx.drawImage(source, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+    let dw = cw;
+    let dh = ch;
+    if (srcRatio > dstRatio) {
+      dh = cw / srcRatio;
     } else {
-      let dw = cw;
-      let dh = ch;
-      if (srcRatio > dstRatio) {
-        dh = cw / srcRatio;
-      } else {
-        dw = ch * srcRatio;
-      }
-      ctx.drawImage(source, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+      dw = ch * srcRatio;
     }
+    ctx.drawImage(source, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
   } else {
     ctx.fillStyle = '#0D1017';
     ctx.fillRect(0, 0, cw, ch);
@@ -120,7 +71,7 @@ function drawFrameToCanvas(
 
   if (showLyricsOverlay) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
     ctx.fillRect(0, ch * 0.62, cw, ch * 0.3);
     ctx.fillStyle = '#FFFFFF';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
@@ -131,41 +82,23 @@ function drawFrameToCanvas(
     ctx.fillText('Teu sorriso é vida em mim', cw / 2, ch * 0.84);
     ctx.restore();
   }
-
-  if (showSafeZone) {
-    ctx.save();
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = 'rgba(245, 196, 30, 0.8)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(cw * 0.05, ch * 0.05, cw * 0.9, ch * 0.9);
-    ctx.restore();
-  }
 }
 
 export function StageSimulator({
   screens,
   initialUrl,
   initialFilename,
+  onFilePicked,
 }: StageSimulatorProps) {
-  const [primaryMedia, setPrimaryMedia] = useState<LoadedPreviewMedia | null>(null);
-  const [sideMedia, setSideMedia] = useState<LoadedPreviewMedia | null>(null);
-
-  const [stageMode, setStageMode] = useState<StageMode>('mirror');
-  const [fitMode, setFitMode] = useState<FitMode>('contain');
-  const [showSafeZone, setShowSafeZone] = useState(false);
+  const [media, setMedia] = useState<LoadedPreviewMedia | null>(null);
+  const [blockError, setBlockError] = useState<string | null>(null);
   const [showLyricsOverlay, setShowLyricsOverlay] = useState(false);
-  const [mobileFocus, setMobileFocus] = useState<MobileFocus>('ALL');
-
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoop, setIsLoop] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
-  const primaryImgRef = useRef<HTMLImageElement | null>(null);
-  const sideVideoRef = useRef<HTMLVideoElement | null>(null);
-  const sideImgRef = useRef<HTMLImageElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   const leftCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const centerCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -175,65 +108,109 @@ export function StageSimulator({
   const centerScreen = screens.find((s) => s.code === 'CENTER') ?? screens[1];
   const rightScreen = screens.find((s) => s.code === 'RIGHT') ?? screens[2];
 
-  const loadLocalFile = useCallback(async (file: File, target: 'primary' | 'side') => {
-    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-    const isVideo = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'].includes(ext);
-    const isImage = ['.png', '.jpg', '.jpeg', '.bmp', '.gif'].includes(ext);
-    if (!isVideo && !isImage) return;
+  const loadLocalFile = useCallback(
+    async (file: File) => {
+      setBlockError(null);
+      const ext = getExtension(file.name);
+      const preCheck = validateMediaForHolyrics({
+        filename: file.name,
+        fileSizeBytes: file.size,
+        screens,
+      });
 
-    const url = URL.createObjectURL(file);
+      if (preCheck.status === 'REJECTED' || !preCheck.category) {
+        setBlockError(preCheck.messages[0] || 'Arquivo bloqueado pelo padrão do Holyrics.');
+        setMedia(null);
+        return;
+      }
 
-    if (isImage) {
-      const img = new Image();
-      img.onload = () => {
-        const loaded: LoadedPreviewMedia = {
-          url,
-          filename: file.name,
-          kind: 'image',
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          fileSizeBytes: file.size,
-        };
-        if (target === 'primary') {
-          primaryImgRef.current = img;
-          setPrimaryMedia(loaded);
+      if (preCheck.category === 'AUDIO' || preCheck.category === 'DOCUMENT') {
+        onFilePicked?.(file);
+        return;
+      }
+
+      const isVideo = preCheck.category === 'VIDEO';
+      const url = URL.createObjectURL(file);
+
+      if (!isVideo) {
+        const img = new Image();
+        img.onload = () => {
+          const fullCheck = validateMediaForHolyrics({
+            filename: file.name,
+            fileSizeBytes: file.size,
+            widthPx: img.naturalWidth,
+            heightPx: img.naturalHeight,
+            screens,
+          });
+          if (fullCheck.status === 'REJECTED') {
+            URL.revokeObjectURL(url);
+            setBlockError(fullCheck.messages[0]);
+            setMedia(null);
+            return;
+          }
+          imgRef.current = img;
+          setMedia({
+            url,
+            filename: file.name,
+            kind: 'image',
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            fileSizeBytes: file.size,
+          });
           setIsPlaying(false);
           setDuration(0);
           setCurrentTime(0);
-        } else {
-          sideImgRef.current = img;
-          setSideMedia(loaded);
-        }
-      };
-      img.src = url;
-      return;
-    }
+          onFilePicked?.(file);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          setBlockError(`Não foi possível abrir a imagem "${file.name}" (${ext}).`);
+        };
+        img.src = url;
+        return;
+      }
 
-    const vid = document.createElement('video');
-    vid.preload = 'auto';
-    vid.muted = true;
-    vid.playsInline = true;
-    vid.onloadedmetadata = () => {
-      const loaded: LoadedPreviewMedia = {
-        url,
-        filename: file.name,
-        kind: 'video',
-        width: vid.videoWidth,
-        height: vid.videoHeight,
-        duration: Number.isFinite(vid.duration) ? vid.duration : 0,
-        fileSizeBytes: file.size,
-      };
-      if (target === 'primary') {
-        setPrimaryMedia(loaded);
+      const vid = document.createElement('video');
+      vid.preload = 'auto';
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.onloadedmetadata = () => {
+        const fullCheck = validateMediaForHolyrics({
+          filename: file.name,
+          fileSizeBytes: file.size,
+          widthPx: vid.videoWidth,
+          heightPx: vid.videoHeight,
+          screens,
+        });
+        if (fullCheck.status === 'REJECTED') {
+          URL.revokeObjectURL(url);
+          setBlockError(fullCheck.messages[0]);
+          setMedia(null);
+          return;
+        }
+        const loaded: LoadedPreviewMedia = {
+          url,
+          filename: file.name,
+          kind: 'video',
+          width: vid.videoWidth,
+          height: vid.videoHeight,
+          duration: Number.isFinite(vid.duration) ? vid.duration : 0,
+          fileSizeBytes: file.size,
+        };
+        setMedia(loaded);
         setDuration(loaded.duration ?? 0);
         setCurrentTime(0);
         setIsPlaying(true);
-      } else {
-        setSideMedia(loaded);
-      }
-    };
-    vid.src = url;
-  }, []);
+        onFilePicked?.(file);
+      };
+      vid.onerror = () => {
+        URL.revokeObjectURL(url);
+        setBlockError(`Não foi possível reproduzir "${file.name}" no navegador.`);
+      };
+      vid.src = url;
+    },
+    [onFilePicked, screens],
+  );
 
   useEffect(() => {
     if (!initialUrl || !initialFilename) return;
@@ -242,7 +219,7 @@ export function StageSimulator({
     if (isVideo) {
       const vid = document.createElement('video');
       vid.onloadedmetadata = () => {
-        setPrimaryMedia({
+        setMedia({
           url: initialUrl,
           filename: initialFilename,
           kind: 'video',
@@ -258,8 +235,8 @@ export function StageSimulator({
     } else {
       const img = new Image();
       img.onload = () => {
-        primaryImgRef.current = img;
-        setPrimaryMedia({
+        imgRef.current = img;
+        setMedia({
           url: initialUrl,
           filename: initialFilename,
           kind: 'image',
@@ -272,100 +249,33 @@ export function StageSimulator({
     }
   }, [initialUrl, initialFilename]);
 
-  const loadSample = (ratio: '16:9' | '9:16') => {
-    const offscreen = document.createElement('canvas');
-    offscreen.width = ratio === '16:9' ? 1920 : 1080;
-    offscreen.height = ratio === '16:9' ? 1080 : 1920;
-    const octx = offscreen.getContext('2d');
-    if (!octx) return;
-
-    octx.fillStyle = '#0D1829';
-    octx.fillRect(0, 0, offscreen.width, offscreen.height);
-    octx.strokeStyle = '#0095FF';
-    octx.lineWidth = 10;
-    octx.strokeRect(36, 36, offscreen.width - 72, offscreen.height - 72);
-
-    octx.fillStyle = '#FFFFFF';
-    octx.textAlign = 'center';
-    octx.font = '700 84px sans-serif';
-    octx.fillText('NOVA JOVENS 2', offscreen.width / 2, offscreen.height / 2 - 20);
-
-    octx.fillStyle = '#F5C41E';
-    octx.font = '500 40px monospace';
-    octx.fillText(`${ratio} · ${offscreen.width}×${offscreen.height}`, offscreen.width / 2, offscreen.height / 2 + 52);
-
-    const dataUrl = offscreen.toDataURL('image/png');
-    const img = new Image();
-    img.onload = () => {
-      primaryImgRef.current = img;
-      setPrimaryMedia({
-        url: dataUrl,
-        filename: ratio === '16:9' ? 'exemplo_16x9.png' : 'exemplo_vertical_9x16.png',
-        kind: 'image',
-        width: offscreen.width,
-        height: offscreen.height,
-        fileSizeBytes: 500_000,
-      });
-      setIsPlaying(false);
-    };
-    img.src = dataUrl;
-  };
-
   useEffect(() => {
-    const pv = primaryVideoRef.current;
-    const sv = sideVideoRef.current;
-    if (pv) {
-      pv.loop = isLoop;
-      pv.muted = isMuted;
-      if (isPlaying) {
-        pv.play().catch(() => setIsPlaying(false));
-      } else {
-        pv.pause();
-      }
+    const pv = videoRef.current;
+    if (!pv) return;
+    pv.loop = true;
+    pv.muted = true;
+    if (isPlaying) {
+      pv.play().catch(() => setIsPlaying(false));
+    } else {
+      pv.pause();
     }
-    if (sv) {
-      sv.loop = isLoop;
-      sv.muted = true;
-      if (isPlaying) {
-        sv.play().catch(() => undefined);
-      } else {
-        sv.pause();
-      }
-    }
-  }, [isPlaying, isLoop, isMuted, primaryMedia, sideMedia]);
+  }, [isPlaying, media]);
 
   useEffect(() => {
     let rafId = 0;
 
     const render = () => {
-      const pv = primaryVideoRef.current;
-      const sv = sideVideoRef.current;
-
-      const centerSource =
-        primaryMedia?.kind === 'video'
-          ? pv
-          : primaryMedia?.kind === 'image'
-            ? primaryImgRef.current
-            : null;
-      const centerW = primaryMedia?.width ?? 0;
-      const centerH = primaryMedia?.height ?? 0;
-
-      const useSplitSide = stageMode === 'split' && sideMedia !== null;
-      const sideSource = useSplitSide
-        ? sideMedia.kind === 'video'
-          ? sv
-          : sideImgRef.current
-        : centerSource;
-      const sideW = useSplitSide ? sideMedia.width : centerW;
-      const sideH = useSplitSide ? sideMedia.height : centerH;
+      const pv = videoRef.current;
+      const source =
+        media?.kind === 'video' ? pv : media?.kind === 'image' ? imgRef.current : null;
+      const w = media?.width ?? 0;
+      const h = media?.height ?? 0;
 
       drawFrameToCanvas(
         leftCanvasRef.current,
-        sideSource,
-        sideW,
-        sideH,
-        fitMode,
-        showSafeZone,
+        source,
+        w,
+        h,
         showLyricsOverlay,
         leftScreen.label,
         `${leftScreen.widthPx}×${leftScreen.heightPx}`,
@@ -373,11 +283,9 @@ export function StageSimulator({
 
       drawFrameToCanvas(
         centerCanvasRef.current,
-        centerSource,
-        centerW,
-        centerH,
-        fitMode,
-        showSafeZone,
+        source,
+        w,
+        h,
         showLyricsOverlay,
         centerScreen.label,
         `${centerScreen.widthPx}×${centerScreen.heightPx}`,
@@ -385,17 +293,15 @@ export function StageSimulator({
 
       drawFrameToCanvas(
         rightCanvasRef.current,
-        sideSource,
-        sideW,
-        sideH,
-        fitMode,
-        showSafeZone,
+        source,
+        w,
+        h,
         showLyricsOverlay,
         rightScreen.label,
         `${rightScreen.widthPx}×${rightScreen.heightPx}`,
       );
 
-      if (pv && primaryMedia?.kind === 'video') {
+      if (pv && media?.kind === 'video') {
         setCurrentTime(pv.currentTime || 0);
       }
 
@@ -404,292 +310,180 @@ export function StageSimulator({
 
     rafId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(rafId);
-  }, [
-    primaryMedia,
-    sideMedia,
-    stageMode,
-    fitMode,
-    showSafeZone,
-    showLyricsOverlay,
-    leftScreen,
-    centerScreen,
-    rightScreen,
-  ]);
+  }, [media, showLyricsOverlay, leftScreen, centerScreen, rightScreen]);
 
   const handleSeek = (nextTime: number) => {
     setCurrentTime(nextTime);
-    if (primaryVideoRef.current) primaryVideoRef.current.currentTime = nextTime;
-    if (sideVideoRef.current) sideVideoRef.current.currentTime = nextTime;
+    if (videoRef.current) videoRef.current.currentTime = nextTime;
   };
 
-  const validation = primaryMedia
+  const validation = media
     ? validateMediaForHolyrics({
-        filename: primaryMedia.filename,
-        fileSizeBytes: primaryMedia.fileSizeBytes || 10_000_000,
-        widthPx: primaryMedia.width,
-        heightPx: primaryMedia.height,
+        filename: media.filename,
+        fileSizeBytes: media.fileSizeBytes,
+        widthPx: media.width,
+        heightPx: media.height,
         screens,
       })
     : null;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#12141A] p-4 sm:p-5">
-      {primaryMedia?.kind === 'video' && (
-        <video
-          ref={primaryVideoRef}
-          src={primaryMedia.url}
-          className="hidden"
-          playsInline
-          onEnded={() => {
-            if (!isLoop) setIsPlaying(false);
-          }}
-        />
-      )}
-      {sideMedia?.kind === 'video' && (
-        <video ref={sideVideoRef} src={sideMedia.url} className="hidden" playsInline muted />
-      )}
-
-      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">
-            Simulador dos 3 telões (16:9)
-          </h2>
-          <p className="mt-0.5 text-sm text-zinc-400">
-            Dê play para ver como vídeo ou imagem fica no Telão Central ({centerScreen.widthPx}×{centerScreen.heightPx}) e nas Laterais ({leftScreen.widthPx}×{leftScreen.heightPx}).
+          <h2 className="text-base font-semibold text-white">Prévia nos 3 telões (16:9)</h2>
+          <p className="text-xs text-zinc-400">
+            Confira enquadramento antes de enviar para o culto.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLyricsOverlay((v) => !v)}
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
+              showLyricsOverlay
+                ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
+                : 'border-white/12 text-zinc-300 hover:bg-white/5'
+            }`}
+          >
+            <Eye className="h-4 w-4" />
+            <span>Testar letra por cima</span>
+          </button>
+
+          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-xs font-semibold text-white hover:bg-[#0080DC]">
             <Upload className="h-4 w-4" />
-            <span>Testar arquivo</span>
+            <span>{media ? 'Trocar mídia no telão' : 'Importar mídia no telão'}</span>
             <input
               type="file"
-              accept="video/*,image/*"
-              className="sr-only"
+              className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) void loadLocalFile(f, 'primary');
+                if (f) void loadLocalFile(f);
+                e.target.value = '';
               }}
             />
           </label>
-
-          {stageMode === 'split' && (
-            <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/12 px-3.5 text-sm font-medium text-zinc-200 hover:bg-white/5">
-              <Upload className="h-4 w-4" />
-              <span>Arquivo laterais</span>
-              <input
-                type="file"
-                accept="video/*,image/*"
-                className="sr-only"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void loadLocalFile(f, 'side');
-                }}
-              />
-            </label>
-          )}
-
-          <button
-            type="button"
-            onClick={() => loadSample('16:9')}
-            className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5"
-          >
-            Teste 16:9
-          </button>
-          <button
-            type="button"
-            onClick={() => loadSample('9:16')}
-            className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5"
-          >
-            Teste vertical
-          </button>
         </div>
       </div>
 
-      {/* Mobile screen focus */}
-      <div className="mt-4 flex gap-1.5 md:hidden">
-        {(['ALL', 'CENTER', 'SIDES'] as MobileFocus[]).map((focus) => (
-          <button
-            key={focus}
-            type="button"
-            onClick={() => setMobileFocus(focus)}
-            className={`min-h-[44px] flex-1 rounded-lg border text-xs font-medium ${
-              mobileFocus === focus
-                ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-                : 'border-white/10 text-zinc-400'
-            }`}
-          >
-            {focus === 'ALL' ? '3 telas' : focus === 'CENTER' ? 'Central' : 'Laterais'}
-          </button>
-        ))}
-      </div>
+      {media?.kind === 'video' && (
+        <video ref={videoRef} src={media.url} className="hidden" playsInline muted />
+      )}
 
-      {/* 3-Screen Stage */}
-      <div className="mt-4 rounded-xl border border-white/10 bg-[#07080B] p-3 sm:p-4">
-        <div className="flex flex-col items-center gap-3 md:flex-row md:items-end md:gap-4">
-          <div className={`w-full md:flex-1 ${mobileFocus === 'CENTER' ? 'hidden md:block' : 'block'}`}>
-            <div className="mb-1 flex items-center justify-between text-xs text-zinc-400">
+      {/* 3 Telões proporcionais */}
+      <div className="rounded-xl border border-white/10 bg-[#08090C] p-3 sm:p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
+          <div className="md:col-span-3 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400">
               <span>{leftScreen.label}</span>
-              <span className="font-mono-tech">{leftScreen.widthPx}×{leftScreen.heightPx}</span>
+              <span className="font-mono-tech">
+                {leftScreen.widthPx}×{leftScreen.heightPx}
+              </span>
             </div>
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-white/12 bg-black">
-              <canvas ref={leftCanvasRef} width={640} height={360} className="h-full w-full" />
-            </div>
-          </div>
-
-          <div className={`w-full md:flex-[1.2] ${mobileFocus === 'SIDES' ? 'hidden md:block' : 'block'}`}>
-            <div className="mb-1 flex items-center justify-between text-xs text-zinc-300">
-              <span className="font-medium text-white">{centerScreen.label}</span>
-              <span className="font-mono-tech text-[#0095FF]">{centerScreen.widthPx}×{centerScreen.heightPx}</span>
-            </div>
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-[#0095FF]/60 bg-black">
-              <canvas ref={centerCanvasRef} width={768} height={432} className="h-full w-full" />
+            <div className="overflow-hidden rounded-lg border border-white/12 bg-black aspect-video">
+              <canvas
+                ref={leftCanvasRef}
+                width={640}
+                height={360}
+                className="h-full w-full object-contain"
+              />
             </div>
           </div>
 
-          <div className={`w-full md:flex-1 ${mobileFocus === 'CENTER' ? 'hidden md:block' : 'block'}`}>
-            <div className="mb-1 flex items-center justify-between text-xs text-zinc-400">
+          <div className="md:col-span-6 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-300">
+              <span className="font-semibold text-white">{centerScreen.label}</span>
+              <span className="font-mono-tech">
+                {centerScreen.widthPx}×{centerScreen.heightPx}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-[#0095FF]/40 bg-black aspect-video">
+              <canvas
+                ref={centerCanvasRef}
+                width={960}
+                height={540}
+                className="h-full w-full object-contain"
+              />
+            </div>
+          </div>
+
+          <div className="md:col-span-3 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400">
               <span>{rightScreen.label}</span>
-              <span className="font-mono-tech">{rightScreen.widthPx}×{rightScreen.heightPx}</span>
+              <span className="font-mono-tech">
+                {rightScreen.widthPx}×{rightScreen.heightPx}
+              </span>
             </div>
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-white/12 bg-black">
-              <canvas ref={rightCanvasRef} width={640} height={360} className="h-full w-full" />
+            <div className="overflow-hidden rounded-lg border border-white/12 bg-black aspect-video">
+              <canvas
+                ref={rightCanvasRef}
+                width={640}
+                height={360}
+                className="h-full w-full object-contain"
+              />
             </div>
           </div>
         </div>
 
-        {/* Playback bar */}
-        <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Barra simples de reprodução para vídeo */}
+        {media?.kind === 'video' && (
+          <div className="mt-3 flex items-center gap-3 border-t border-white/8 pt-3">
             <button
               type="button"
-              disabled={primaryMedia?.kind !== 'video'}
               onClick={() => setIsPlaying((p) => !p)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white disabled:opacity-40"
+              aria-label={isPlaying ? 'Pausar' : 'Reproduzir'}
+              className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg bg-[#0095FF] text-white hover:bg-[#0080DC]"
             >
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span>{isPlaying ? 'Pausar' : 'Play nas 3 telas'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsLoop((l) => !l)}
-              aria-label="Repetir vídeo"
-              className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border ${
-                isLoop ? 'border-[#0095FF] text-[#0095FF]' : 'border-white/12 text-zinc-400'
-              }`}
-            >
-              <Repeat className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsMuted((m) => !m)}
-              aria-label="Áudio"
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-white/12 text-zinc-300"
-            >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
+            <span className="font-mono-tech w-12 text-xs text-zinc-300">
+              {formatDuration(currentTime)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={duration || 1}
+              step={0.1}
+              value={currentTime}
+              onChange={(e) => handleSeek(Number(e.target.value))}
+              className="h-1.5 flex-1 cursor-pointer accent-[#0095FF]"
+            />
+            <span className="font-mono-tech w-12 text-right text-xs text-zinc-500">
+              {formatDuration(duration)}
+            </span>
           </div>
+        )}
+      </div>
 
-          {primaryMedia?.kind === 'video' && (
-            <div className="flex flex-1 items-center gap-3 sm:max-w-sm">
-              <span className="font-mono-tech text-xs text-zinc-400">{formatDuration(currentTime)}</span>
-              <input
-                type="range"
-                min={0}
-                max={duration || 1}
-                step={0.1}
-                value={currentTime}
-                onChange={(e) => handleSeek(Number(e.target.value))}
-                aria-label="Progresso do vídeo"
-                className="h-2 w-full accent-[#0095FF]"
-              />
-              <span className="font-mono-tech text-xs text-zinc-400">{formatDuration(duration)}</span>
-            </div>
-          )}
+      {/* Alerta de bloqueio ou diagnóstico automático */}
+      {blockError && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-red-500/45 bg-red-500/12 p-3.5 text-sm text-red-200">
+          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <span>{blockError}</span>
         </div>
-      </div>
+      )}
 
-      {/* Simple options */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setStageMode((m) => (m === 'mirror' ? 'split' : 'mirror'))}
-          className={`min-h-[44px] rounded-lg border px-3.5 text-xs font-medium ${
-            stageMode === 'split'
-              ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-              : 'border-white/12 text-zinc-300'
-          }`}
-        >
-          {stageMode === 'mirror' ? 'Modo: Mesma mídia nas 3' : 'Modo: Central + Laterais'}
-        </button>
-
-        {(['contain', 'cover', 'blur'] as FitMode[]).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setFitMode(mode)}
-            className={`min-h-[44px] rounded-lg border px-3 text-xs font-medium ${
-              fitMode === mode
-                ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-                : 'border-white/12 text-zinc-400'
-            }`}
-          >
-            {mode === 'contain' ? 'Ajuste: Conter' : mode === 'cover' ? 'Ajuste: Preencher' : 'Ajuste: Blur bordas'}
-          </button>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => setShowLyricsOverlay((v) => !v)}
-          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
-            showLyricsOverlay
-              ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-              : 'border-white/12 text-zinc-400'
-          }`}
-        >
-          <Eye className="h-3.5 w-3.5" />
-          <span>Simular letra por cima</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowSafeZone((v) => !v)}
-          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
-            showSafeZone
-              ? 'border-[#F5C41E]/60 bg-[#F5C41E]/12 text-[#F5C41E]'
-              : 'border-white/12 text-zinc-400'
-          }`}
-        >
-          <Grid className="h-3.5 w-3.5" />
-          <span>Margem segura</span>
-        </button>
-      </div>
-
-      {primaryMedia && validation && (
+      {media && validation && validation.status !== 'REJECTED' && (
         <div
-          className={`mt-4 rounded-lg border p-3.5 text-sm ${
+          className={`flex items-start gap-2.5 rounded-lg border p-3 text-xs ${
             validation.status === 'VALID'
-              ? 'border-emerald-500/35 bg-emerald-500/10 text-zinc-200'
-              : 'border-[#F5C41E]/40 bg-[#F5C41E]/10 text-zinc-200'
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+              : 'border-[#F5C41E]/35 bg-[#F5C41E]/10 text-[#FDE68A]'
           }`}
         >
-          <div className="flex items-center justify-between gap-2 font-medium">
-            <span className="flex items-center gap-2">
-              {validation.status === 'VALID' ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-[#F5C41E]" />
-              )}
-              {primaryMedia.filename}
-            </span>
-            <span className="font-mono-tech text-xs text-zinc-400">
-              {primaryMedia.width}×{primaryMedia.height}
-            </span>
+          {validation.status === 'VALID' ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#F5C41E]" />
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-white">
+              {media.filename} · {media.width}×{media.height}
+            </p>
+            <p className="mt-0.5 opacity-90">{validation.messages.join(' ')}</p>
           </div>
-          <p className="mt-1 text-xs text-zinc-300">{validation.messages[0]}</p>
         </div>
       )}
     </div>

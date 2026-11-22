@@ -93,42 +93,34 @@ export const HOLYRICS_SPECS: HolyricsSpecRule[] = [
   {
     category: 'VIDEO',
     title: 'Vídeos',
-    acceptedExtensions: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'],
+    acceptedExtensions: ['.mp4', '.mov', '.mkv', '.avi', '.wmv', '.webm'],
     recommended: '.mp4 (H.264 + AAC)',
-    resolutionRule: '1920×1080 ou 3840×2160 (Central) / 3200×1800 (Laterais) em 16:9',
-    notes: 'Reprodução pelo VLC integrado ao Holyrics.',
+    resolutionRule: '16:9 obrigatório — Central 3840×2160 ou 1920×1080 · Laterais 3200×1800',
+    notes: 'Vídeos verticais (9:16) ou fora de 16:9 são bloqueados no envio.',
   },
   {
     category: 'IMAGE',
     title: 'Imagens e Avisos',
-    acceptedExtensions: ['.png', '.jpg', '.jpeg', '.bmp', '.gif'],
-    recommended: '.png (com transparência) ou .jpg',
-    resolutionRule: 'Central 3840×2160 px · Laterais 3200×1800 px (16:9)',
-    notes: 'Imagens verticais ficam com barras laterais.',
+    acceptedExtensions: ['.png', '.jpg', '.jpeg'],
+    recommended: '.png ou .jpg em 16:9',
+    resolutionRule: '16:9 obrigatório — Central 3840×2160 px · Laterais 3200×1800 px',
+    notes: 'Arquivos verticais ou quadrados são bloqueados para não distorcer nem sobrar tarjas.',
   },
   {
     category: 'AUDIO',
     title: 'Áudios e Trilhas',
-    acceptedExtensions: ['.mp3', '.wav', '.aac', '.ogg', '.flac'],
+    acceptedExtensions: ['.mp3', '.wav', '.aac', '.ogg'],
     recommended: '.mp3 (320 kbps) ou .wav',
     resolutionRule: 'Estéreo normalizado',
-    notes: 'Toca direto no player do Holyrics.',
+    notes: 'Toca direto no player integrado do Holyrics.',
   },
   {
     category: 'DOCUMENT',
-    title: 'Apresentações',
-    acceptedExtensions: ['.pdf', '.ppt', '.pptx'],
-    recommended: '.pdf ou imagens .png/.jpg 16:9',
+    title: 'Apresentações / Slides',
+    acceptedExtensions: ['.pdf'],
+    recommended: '.pdf em 16:9 (ou imagens .png/.jpg 16:9)',
     resolutionRule: 'Proporção 16:9',
-    notes: 'PPT/PPTX exige PowerPoint instalado no Windows da mesa. Prefira PDF ou PNG.',
-  },
-  {
-    category: 'LYRICS',
-    title: 'Letras',
-    acceptedExtensions: ['.txt'],
-    recommended: '.txt em blocos de 2 a 4 linhas',
-    resolutionRule: 'Estrofes separadas por linha em branco',
-    notes: 'Gerado automaticamente ao salvar as músicas.',
+    notes: 'PPT/PPTX bloqueado nos telões pois quebra fontes e depende de PowerPoint na mesa. Exporte em PDF ou PNG.',
   },
 ];
 
@@ -275,6 +267,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       aspectRatio: '16:9',
     },
   ],
+  members: INITIAL_MEMBERS,
+  activeScheduleId: 'sch-2026-11-21-aud',
   assignments: [
     {
       id: 'asg-1',
@@ -328,8 +322,10 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
   ],
   schedules: [
     {
+      id: 'sch-2026-11-07-aud',
       date: '2026-11-07',
       title: 'Culto Nova Jovens 2',
+      locationType: 'AUDITORIO_PRINCIPAL',
       isPast: true,
       assignments: [
         { id: 'h1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
@@ -341,8 +337,10 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       ],
     },
     {
+      id: 'sch-2026-11-14-aud',
       date: '2026-11-14',
       title: 'Culto de Adoração',
+      locationType: 'AUDITORIO_PRINCIPAL',
       isPast: true,
       assignments: [
         { id: 'h2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
@@ -354,8 +352,10 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       ],
     },
     {
+      id: 'sch-2026-11-21-aud',
       date: '2026-11-21',
       title: 'Culto Nova Jovens 2',
+      locationType: 'AUDITORIO_PRINCIPAL',
       assignments: [
         { id: 'asg-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'CONFIRMED', confirmedAt: '18:10', servingOnDesk: true, deskCheckinAt: '18:48' },
         { id: 'asg-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'CONFIRMED', confirmedAt: '17:40', servingOnDesk: true, deskCheckinAt: '18:52' },
@@ -366,8 +366,10 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       ],
     },
     {
+      id: 'sch-2026-11-28-aud',
       date: '2026-11-28',
       title: 'Noite Manauara',
+      locationType: 'AUDITORIO_PRINCIPAL',
       assignments: [
         { id: 'n1-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n1-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '10:15', servingOnDesk: false },
@@ -378,8 +380,21 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       ],
     },
     {
+      id: 'sch-2026-11-28-sala2',
+      date: '2026-11-28',
+      title: 'Encontro Teen / Pré-culto',
+      locationType: 'SALA',
+      roomName: 'Sala 2',
+      assignments: [
+        { id: 'n1s-1', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'CONFIRMED', confirmedAt: '12:10', servingOnDesk: false },
+        { id: 'n1s-2', position: 'RETORNO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+      ],
+    },
+    {
+      id: 'sch-2026-12-05-aud',
       date: '2026-12-05',
       title: 'Congresso Jovens',
+      locationType: 'AUDITORIO_PRINCIPAL',
       assignments: [
         { id: 'n2-1', position: 'CAPITAO', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n2-2', position: 'PRINCIPAL', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
@@ -390,8 +405,10 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       ],
     },
     {
+      id: 'sch-2026-12-12-aud',
       date: '2026-12-12',
       title: 'Culto de Encerramento',
+      locationType: 'AUDITORIO_PRINCIPAL',
       assignments: [
         { id: 'n3-1', position: 'CAPITAO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n3-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
@@ -547,16 +564,19 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       songCode: 'M1',
       orderIndex: 1,
       title: 'Medley Morada',
-      artist: 'Morada',
-      key: 'G',
-      bpm: 74,
-      rawLyrics: `[Verso 1]
-O que Tua glória fez comigo
+      rawLyrics: `O que Tua glória fez comigo
 Eu não sei explicar
 Só sei que agora eu quero mais
 De Ti, Jesus`,
-      holyricsTxt: `Medley Morada - Morada\nTom: G | BPM: 74\n\n[Verso 1]\nO que Tua glória fez comigo\nEu não sei explicar\n\nSó sei que agora eu quero mais\nDe Ti, Jesus`,
+      holyricsTxt: `O que Tua glória fez comigo\nEu não sei explicar\n\nSó sei que agora eu quero mais\nDe Ti, Jesus`,
+      holyricsOneLineTxt: `O que Tua glória fez comigo\n\nEu não sei explicar\n\nSó sei que agora eu quero mais\n\nDe Ti, Jesus`,
+      holyricsTwoLinesTxt: `O que Tua glória fez comigo\nEu não sei explicar\n\nSó sei que agora eu quero mais\nDe Ti, Jesus`,
       approved: true,
+      validatedBySchedule: true,
+      notes: 'Repetir o último verso 2x no final se o dirigente puxar.',
+      slideNotes: {
+        'two-1': 'Atenção na entrada do coro',
+      },
       addedBy: 'Beatriz Almeida',
     },
     {
@@ -564,15 +584,14 @@ De Ti, Jesus`,
       songCode: 'M2',
       orderIndex: 2,
       title: 'Viver por Ti',
-      artist: 'Nova Jovens',
-      key: 'A',
-      bpm: 122,
-      rawLyrics: `[Coro]
-Eu quero viver por Ti
+      rawLyrics: `Eu quero viver por Ti
 Em todo tempo Te servir
 A minha vida entrego a Ti`,
-      holyricsTxt: `Viver por Ti - Nova Jovens\nTom: A | BPM: 122\n\n[Coro]\nEu quero viver por Ti\nEm todo tempo Te servir\nA minha vida entrego a Ti`,
+      holyricsTxt: `Eu quero viver por Ti\nEm todo tempo Te servir\n\nA minha vida entrego a Ti`,
+      holyricsOneLineTxt: `Eu quero viver por Ti\n\nEm todo tempo Te servir\n\nA minha vida entrego a Ti`,
+      holyricsTwoLinesTxt: `Eu quero viver por Ti\nEm todo tempo Te servir\n\nA minha vida entrego a Ti`,
       approved: true,
+      validatedBySchedule: true,
       addedBy: 'Beatriz Almeida',
     },
     {
@@ -580,14 +599,13 @@ A minha vida entrego a Ti`,
       songCode: 'M3',
       orderIndex: 3,
       title: 'Até que Ele venha',
-      artist: 'Ministério',
-      key: 'E',
-      bpm: 70,
-      rawLyrics: `[Verso 1]
-Maranata, ora vem Senhor Jesus
+      rawLyrics: `Maranata, ora vem Senhor Jesus
 Até que Ele venha estaremos aqui`,
-      holyricsTxt: `Até que Ele venha - Ministério\nTom: E | BPM: 70\n\n[Verso 1]\nMaranata, ora vem Senhor Jesus\nAté que Ele venha estaremos aqui`,
+      holyricsTxt: `Maranata, ora vem Senhor Jesus\nAté que Ele venha estaremos aqui`,
+      holyricsOneLineTxt: `Maranata, ora vem Senhor Jesus\n\nAté que Ele venha estaremos aqui`,
+      holyricsTwoLinesTxt: `Maranata, ora vem Senhor Jesus\nAté que Ele venha estaremos aqui`,
       approved: false,
+      validatedBySchedule: true,
       addedBy: 'Beatriz Almeida',
     },
     {
@@ -595,12 +613,10 @@ Até que Ele venha estaremos aqui`,
       songCode: 'M4',
       orderIndex: 4,
       title: 'Pregue o evangelho',
-      artist: 'Ministério',
-      key: 'C',
-      bpm: 76,
       rawLyrics: '',
       holyricsTxt: '',
       approved: false,
+      validatedBySchedule: false,
       addedBy: 'Roteiro (aguardando letra)',
     },
   ],

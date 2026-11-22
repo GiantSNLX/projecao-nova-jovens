@@ -47,6 +47,8 @@ export type MediaDisplayTrigger =
   | 'ESQUETE'
   | 'BRINCADEIRA';
 
+export type ScheduleLocationType = 'AUDITORIO_PRINCIPAL' | 'SALA';
+
 export type TabId =
   | 'inicio'
   | 'musicas'
@@ -86,8 +88,11 @@ export interface DeskAssignment {
 }
 
 export interface SaturdaySchedule {
+  id: string;
   date: string;
   title: string;
+  locationType: ScheduleLocationType;
+  roomName?: string;
   isPast?: boolean;
   assignments: DeskAssignment[];
 }
@@ -120,8 +125,8 @@ export interface ServiceSong {
   songCode?: string;
   orderIndex: number;
   title: string;
-  artist: string;
-  key: string;
+  artist?: string;
+  key?: string;
   bpm?: number;
   rawLyrics: string;
   holyricsTxt: string;
@@ -129,6 +134,9 @@ export interface ServiceSong {
   holyricsTwoLinesTxt?: string;
   approved: boolean;
   notes?: string;
+  slideNotes?: Record<string, string>;
+  matchedSongCode?: string;
+  validatedBySchedule?: boolean;
   adjustmentRequest?: AdjustmentRequest;
   addedBy: string;
 }
@@ -203,6 +211,8 @@ export interface ServiceState {
   liveStartedAt?: string;
   liveNotes: string;
   screens: StageScreen[];
+  members: MemberUser[];
+  activeScheduleId: string;
   assignments: DeskAssignment[];
   schedules: SaturdaySchedule[];
   runItems: RunItem[];

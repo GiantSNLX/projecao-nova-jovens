@@ -24,7 +24,7 @@ interface CultoTabProps {
   members: MemberUser[];
   canOperateDesk: boolean;
   uploadedFilesMap: Map<string, File>;
-  onSelectServiceDate: (date: string) => void;
+  onSelectSchedule: (scheduleId: string) => void;
   onUpdateLiveNotes: (notes: string) => void;
   onRequestMediaAdjustment: (assetId: string, reason: string) => void;
   onRequestSongAdjustment: (songId: string, reason: string) => void;
@@ -42,7 +42,7 @@ export function CultoTab({
   members,
   canOperateDesk,
   uploadedFilesMap,
-  onSelectServiceDate,
+  onSelectSchedule,
   onUpdateLiveNotes,
   onRequestMediaAdjustment,
   onRequestSongAdjustment,
@@ -65,10 +65,12 @@ export function CultoTab({
 
   const upcomingSchedules = state.schedules
     .filter((s) => !s.isPast)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
 
   const currentSchedule =
-    upcomingSchedules.find((s) => s.date === state.serviceDate) ?? upcomingSchedules[0];
+    upcomingSchedules.find((s) => s.id === state.activeScheduleId) ??
+    upcomingSchedules.find((s) => s.date === state.serviceDate) ??
+    upcomingSchedules[0];
 
   const sortedItems = state.runItems.slice().sort((a, b) => a.orderIndex - b.orderIndex);
   const onDemandMedia = state.mediaAssets.filter((m) => m.displayTrigger !== 'RUN_ITEM');
@@ -267,30 +269,45 @@ export function CultoTab({
           </p>
         </div>
 
-        <div className="w-full sm:w-auto sm:min-w-[280px]">
+        <div className="w-full sm:w-auto sm:min-w-[320px]">
           <label htmlFor="culto-select" className="block text-xs font-medium text-zinc-400">
             Culto selecionado
           </label>
           <select
             id="culto-select"
-            value={currentSchedule?.date ?? state.serviceDate}
-            onChange={(e) => onSelectServiceDate(e.target.value)}
+            value={currentSchedule?.id ?? ''}
+            onChange={(e) => onSelectSchedule(e.target.value)}
             className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-sm font-medium text-white focus:border-[#0095FF] focus:outline-none"
           >
-            {upcomingSchedules.map((sched) => (
-              <option key={sched.date} value={sched.date}>
-                {formatDateBr(sched.date)} — {sched.title}
-              </option>
-            ))}
+            {upcomingSchedules.map((sched) => {
+              const loc =
+                sched.locationType === 'SALA'
+                  ? sched.roomName?.trim() || 'Sala'
+                  : 'Auditório Principal';
+              return (
+                <option key={sched.id} value={sched.id}>
+                  {formatDateBr(sched.date)} — {sched.title} ({loc})
+                </option>
+              );
+            })}
           </select>
         </div>
       </section>
 
-      {/* Equipe na mesa (6 posições) */}
+      {/* Equipe na mesa (conforme local: Auditório Principal ou Sala) */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-300">
-          Equipe escalada ({currentSchedule?.title ?? state.title})
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-300">
+            Equipe escalada ({currentSchedule?.title ?? state.title})
+          </h2>
+          {currentSchedule && (
+            <span className="rounded border border-white/10 bg-[#12141A] px-2.5 py-0.5 text-xs text-zinc-300">
+              {currentSchedule.locationType === 'SALA'
+                ? `${currentSchedule.roomName || 'Sala'} · funções reduzidas`
+                : 'Auditório Principal · 6 funções'}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
           {(currentSchedule?.assignments ?? state.assignments).map((asg) => {
             const member = members.find((m) => m.id === asg.userId);
@@ -411,6 +428,30 @@ export function CultoTab({
                         <p className="text-xs text-[#F5C41E]">
                           Aguardando Ministério de Música enviar a letra ({linkedSong.songCode})
                         </p>
+                      )}
+
+                      {linkedSong.notes && (
+                        <p className="rounded border border-[#0095FF]/30 bg-[#0095FF]/10 px-2.5 py-1.5 text-xs text-zinc-200">
+                          Obs. Música: {linkedSong.notes}
+                        </p>
+                      )}
+
+                      {linkedSong.slideNotes && Object.keys(linkedSong.slideNotes).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(linkedSong.slideNotes).map(([key, msg]) => {
+                            const [mode, idxStr] = key.split('-');
+                            const slideNum = Number(idxStr) + 1;
+                            const label = mode === 'one' ? '1 linha' : '2 linhas';
+                            return (
+                              <span
+                                key={key}
+                                className="rounded border border-[#F5C41E]/35 bg-[#F5C41E]/10 px-2 py-0.5 text-[11px] text-[#F5C41E]"
+                              >
+                                Slide {slideNum} ({label}): {msg}
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
 
                       {linkedSong.adjustmentRequest && (

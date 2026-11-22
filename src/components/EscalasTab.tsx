@@ -27,7 +27,14 @@ interface EscalasTabProps {
 
 type EscalaSubTab = 'ver' | 'montar';
 
-const ALL_POSITIONS: DeskPosition[] = ['CAPITAO', 'PRINCIPAL', 'RETORNO', 'CORTE', 'APOIO'];
+const ALL_POSITIONS: DeskPosition[] = [
+  'CAPITAO',
+  'PRINCIPAL',
+  'RETORNO',
+  'CORTE',
+  'STUDIO',
+  'APOIO',
+];
 
 function formatDateBr(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
@@ -70,6 +77,7 @@ export function EscalasTab({
         PRINCIPAL: 0,
         RETORNO: 0,
         CORTE: 0,
+        STUDIO: 0,
         APOIO: 0,
       };
       let lastServedDate = '';
@@ -180,7 +188,7 @@ export function EscalasTab({
       {activeSubTab === 'ver' && activeSchedule && (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>Mesa de Projeção (5 posições)</span>
+            <span>Mesa de Projeção (6 posições)</span>
             <span>{formatDateBr(activeSchedule.date)} · 19h00</span>
           </div>
 
@@ -413,7 +421,7 @@ export function EscalasTab({
                       Total: {row.total}
                     </span>
                   </div>
-                  <div className="mt-2.5 grid grid-cols-5 gap-1.5 text-center text-xs">
+                  <div className="mt-2.5 grid grid-cols-3 gap-1.5 text-center text-xs sm:grid-cols-6">
                     {ALL_POSITIONS.map((pos) => (
                       <div
                         key={pos}

@@ -52,54 +52,67 @@ export function sanitizeSlug(value: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-export function formatLyricsForHolyrics(
+/**
+ * Formata uma letra fielmente para o Holyrics 2.29.1 sem alterar ordem ou repetições.
+ * Gera duas versões:
+ *  - 1 linha por slide (para Retorno e Studio)
+ *  - até 2 linhas consecutivas por slide (para Principal)
+ */
+export function formatHolyricsVersions(
   rawLyrics: string,
-  title: string,
-  artist: string,
-  key?: string,
-  bpm?: number,
-): string {
-  const headerParts = [`${title.trim()}${artist.trim() ? ` - ${artist.trim()}` : ''}`];
-  const metaParts: string[] = [];
-  if (key?.trim()) metaParts.push(`Tom: ${key.trim()}`);
-  if (bpm) metaParts.push(`BPM: ${bpm}`);
-  if (metaParts.length > 0) headerParts.push(metaParts.join(' | '));
+  songTitleToExclude?: string,
+): { oneLineTxt: string; twoLinesTxt: string } {
+  const cleanTitle = songTitleToExclude?.trim().toLowerCase();
 
-  const blocks = rawLyrics
+  const stanzas = rawLyrics
     .replace(/\r\n/g, '\n')
     .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean);
+    .map((block) =>
+      block
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !/^\[.+\]$/.test(l)),
+    )
+    .filter((lines) => lines.length > 0);
 
-  const formattedBlocks: string[] = [];
+  // Strip song title if it is the very first standalone line
+  if (
+    stanzas.length > 0 &&
+    cleanTitle &&
+    stanzas[0][0]?.toLowerCase() === cleanTitle
+  ) {
+    stanzas[0].shift();
+    if (stanzas[0].length === 0) stanzas.shift();
+  }
 
-  for (const block of blocks) {
-    const lines = block
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
+  const allSingleLines: string[] = [];
+  const twoLineBlocks: string[] = [];
 
-    if (lines.length === 0) continue;
-
-    let label = '';
-    let lyricLines = lines;
-    if (/^\[.+\]$/.test(lines[0])) {
-      label = lines[0];
-      lyricLines = lines.slice(1);
+  for (const lines of stanzas) {
+    for (const line of lines) {
+      allSingleLines.push(line);
     }
 
-    if (lyricLines.length <= 4) {
-      formattedBlocks.push(label ? `${label}\n${lyricLines.join('\n')}` : lyricLines.join('\n'));
-    } else {
-      for (let i = 0; i < lyricLines.length; i += 2) {
-        const chunk = lyricLines.slice(i, i + 2);
-        const prefix = i === 0 && label ? `${label}\n` : '';
-        formattedBlocks.push(`${prefix}${chunk.join('\n')}`);
-      }
+    for (let i = 0; i < lines.length; i += 2) {
+      const pair = lines.slice(i, i + 2);
+      twoLineBlocks.push(pair.join('\n'));
     }
   }
 
-  return `${headerParts.join('\n')}\n\n${formattedBlocks.join('\n\n')}`.trim();
+  return {
+    oneLineTxt: allSingleLines.join('\n\n'),
+    twoLinesTxt: twoLineBlocks.join('\n\n'),
+  };
+}
+
+export function formatLyricsForHolyrics(
+  rawLyrics: string,
+  title: string,
+  _artist = '',
+  _key?: string,
+  _bpm?: number,
+): string {
+  return formatHolyricsVersions(rawLyrics, title).twoLinesTxt;
 }
 
 export function validateMediaForHolyrics(params: {
@@ -335,26 +348,22 @@ export async function generateAndDownloadHolyricsZip(
   importFolder?.file('roteiro_culto.txt', roteiroTxt);
   importFolder?.file('culto_holyrics.json', JSON.stringify(pkgJson, null, 2));
 
-  const allLyricsCombined: string[] = [];
+  const oneLineFolder = lyricsFolder?.folder('01 - 1 linha');
+  const twoLinesFolder = lyricsFolder?.folder('02 - 2 linhas');
+
   for (const song of sortedSongs) {
     const prefix = song.songCode ? `${song.songCode}_` : `${String(song.orderIndex).padStart(2, '0')}_`;
     const fileName = `${prefix}${sanitizeSlug(song.title)}.txt`;
-    const body =
-      song.holyricsTxt ||
-      formatLyricsForHolyrics(
-        song.rawLyrics || '[Verso 1]\nLetra não informada',
-        song.title,
-        song.artist,
-        song.key,
-        song.bpm,
-      );
-    lyricsFolder?.file(fileName, body);
-    allLyricsCombined.push(body);
+    const fallback = formatHolyricsVersions(
+      song.rawLyrics || 'Letra não informada',
+      song.title,
+    );
+    const oneLine = song.holyricsOneLineTxt || fallback.oneLineTxt;
+    const twoLines = song.holyricsTwoLinesTxt || song.holyricsTxt || fallback.twoLinesTxt;
+
+    oneLineFolder?.file(fileName, oneLine);
+    twoLinesFolder?.file(fileName, twoLines);
   }
-  lyricsFolder?.file(
-    'todas_musicas_semana.txt',
-    allLyricsCombined.join('\n\n==============================\n\n'),
-  );
 
   let mediaCount = 0;
 

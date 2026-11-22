@@ -12,6 +12,7 @@
   "dependencies": {
     "jszip": "^3.10.1",
     "lucide-react": "^0.511.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tesseract.js": "^7.0.0"

@@ -2,7 +2,13 @@ export type Role = 'ADMIN' | 'CAPTAIN' | 'MEMBER' | 'MUSIC' | 'PROGRAMMING';
 
 export type ProgrammingTeam = 'ALPHA' | 'BRAVO' | 'CHARLIE';
 
-export type DeskPosition = 'CAPITAO' | 'PRINCIPAL' | 'RETORNO' | 'CORTE' | 'APOIO';
+export type DeskPosition =
+  | 'CAPITAO'
+  | 'PRINCIPAL'
+  | 'RETORNO'
+  | 'CORTE'
+  | 'STUDIO'
+  | 'APOIO';
 
 export type ServiceStatus =
   | 'DRAFT'
@@ -112,6 +118,8 @@ export interface ServiceSong {
   bpm?: number;
   rawLyrics: string;
   holyricsTxt: string;
+  holyricsOneLineTxt?: string;
+  holyricsTwoLinesTxt?: string;
   approved: boolean;
   notes?: string;
   addedBy: string;

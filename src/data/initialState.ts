@@ -52,6 +52,11 @@ export const DESK_POSITION_INFO: Record<
     short: 'Corte',
     responsibility: 'Faz os cortes de câmera e transições com os telões.',
   },
+  STUDIO: {
+    label: 'Studio',
+    short: 'Studio',
+    responsibility: 'Controla o retorno e letras de 1 linha no estúdio/transmissão.',
+  },
   APOIO: {
     label: 'Apoio',
     short: 'Apoio',
@@ -226,6 +231,15 @@ export const INITIAL_MEMBERS: MemberUser[] = [
     programmingTeam: 'CHARLIE',
     active: true,
   },
+  {
+    id: 'usr-10',
+    senibId: '1245',
+    pin: '1234',
+    name: 'Pedro Henrique',
+    ministry: 'Projeção',
+    roles: ['MEMBER'],
+    active: true,
+  },
 ];
 
 export const INITIAL_SERVICE_STATE: ServiceState = {
@@ -298,6 +312,14 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       id: 'asg-5',
+      position: 'STUDIO',
+      userId: 'usr-10',
+      attendanceStatus: 'CONFIRMED',
+      confirmedAt: '18:20',
+      servingOnDesk: false,
+    },
+    {
+      id: 'asg-6',
       position: 'APOIO',
       userId: 'usr-2',
       attendanceStatus: 'PENDING',
@@ -313,7 +335,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'h1-2', position: 'PRINCIPAL', userId: 'usr-1', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
         { id: 'h1-3', position: 'RETORNO', userId: 'usr-5', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
         { id: 'h1-4', position: 'CORTE', userId: 'usr-3', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
-        { id: 'h1-5', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h1-6', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
       ],
     },
     {
@@ -324,7 +347,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'h2-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
         { id: 'h2-3', position: 'RETORNO', userId: 'usr-3', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
         { id: 'h2-4', position: 'CORTE', userId: 'usr-2', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
-        { id: 'h2-5', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
+        { id: 'h2-6', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'CONFIRMED', servingOnDesk: true },
       ],
     },
     {
@@ -334,7 +358,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'asg-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'CONFIRMED', confirmedAt: '17:40', servingOnDesk: true, deskCheckinAt: '18:52' },
         { id: 'asg-3', position: 'RETORNO', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '18:02', servingOnDesk: false },
         { id: 'asg-4', position: 'CORTE', userId: 'usr-5', attendanceStatus: 'CONFIRMED', confirmedAt: '18:15', servingOnDesk: false },
-        { id: 'asg-5', position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'asg-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'CONFIRMED', confirmedAt: '18:20', servingOnDesk: false },
+        { id: 'asg-6', position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
       ],
     },
     {
@@ -344,7 +369,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'n1-2', position: 'PRINCIPAL', userId: 'usr-4', attendanceStatus: 'CONFIRMED', confirmedAt: '10:15', servingOnDesk: false },
         { id: 'n1-3', position: 'RETORNO', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n1-4', position: 'CORTE', userId: 'usr-1', attendanceStatus: 'CONFIRMED', confirmedAt: '11:00', servingOnDesk: false },
-        { id: 'n1-5', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n1-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n1-6', position: 'APOIO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
       ],
     },
     {
@@ -354,7 +380,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'n2-2', position: 'PRINCIPAL', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n2-3', position: 'RETORNO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n2-4', position: 'CORTE', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
-        { id: 'n2-5', position: 'APOIO', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n2-6', position: 'APOIO', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
       ],
     },
     {
@@ -364,7 +391,8 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
         { id: 'n3-2', position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n3-3', position: 'RETORNO', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
         { id: 'n3-4', position: 'CORTE', userId: 'usr-1', attendanceStatus: 'PENDING', servingOnDesk: false },
-        { id: 'n3-5', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-5', position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'PENDING', servingOnDesk: false },
+        { id: 'n3-6', position: 'APOIO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
       ],
     },
   ],

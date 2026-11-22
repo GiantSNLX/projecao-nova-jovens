@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  Copy,
   Download,
   Play,
   Radio,
   SkipForward,
   UserCheck,
 } from 'lucide-react';
-import type { LiveItemStatus, MemberUser, ServiceState } from '../types/portal';
+import type { LiveItemStatus, MemberUser, ServiceSong, ServiceState } from '../types/portal';
 import { DESK_POSITION_INFO } from '../data/initialState';
 import {
   describeMediaTrigger,
+  formatHolyricsVersions,
   generateAndDownloadHolyricsZip,
+  sanitizeSlug,
 } from '../utils/holyrics';
 
 interface CultoTabProps {
@@ -39,6 +42,7 @@ export function CultoTab({
   const [notesDraft, setNotesDraft] = useState(state.liveNotes);
   const [isExporting, setIsExporting] = useState(false);
   const [exportedFilename, setExportedFilename] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
     setNotesDraft(state.liveNotes);
@@ -58,6 +62,41 @@ export function CultoTab({
   const ss = elapsedSeconds % 60;
   const clockStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 
+  const getSongVersions = (song: ServiceSong) => {
+    const fallback = formatHolyricsVersions(song.rawLyrics || '', song.title);
+    return {
+      oneLine: song.holyricsOneLineTxt || fallback.oneLineTxt,
+      twoLines: song.holyricsTwoLinesTxt || song.holyricsTxt || fallback.twoLinesTxt,
+    };
+  };
+
+  const handleCopySong = async (song: ServiceSong, mode: 'one' | 'two') => {
+    const versions = getSongVersions(song);
+    const text = mode === 'one' ? versions.oneLine : versions.twoLines;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(`${song.id}-${mode}`);
+      setTimeout(() => setCopiedKey(null), 1600);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDownloadSong = (song: ServiceSong, mode: 'one' | 'two') => {
+    const versions = getSongVersions(song);
+    const text = mode === 'one' ? versions.oneLine : versions.twoLines;
+    const label = mode === 'one' ? '1_linha_Retorno_Studio' : '2_linhas_Principal';
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${song.songCode ? `${song.songCode}_` : ''}${sanitizeSlug(song.title)}_${label}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
   const handleDownloadHolyricsZip = async () => {
     setIsExporting(true);
     try {
@@ -71,12 +110,11 @@ export function CultoTab({
 
   return (
     <div className="space-y-8">
-      {/* Header + Live Toggle */}
       <section className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Culto</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Tudo que veio da Programação e da Música reunido para a mesa operar e baixar no Holyrics.
+            Roteiro, letras prontas para Principal (2 linhas) e Retorno/Studio (1 linha), mídias e notas na mesa.
           </p>
         </div>
 
@@ -104,10 +142,10 @@ export function CultoTab({
         </div>
       </section>
 
-      {/* Equipe na mesa */}
+      {/* Equipe na mesa (6 posições incluindo Studio) */}
       <section>
         <h2 className="mb-3 text-sm font-semibold text-zinc-300">Quem está na mesa agora</h2>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
           {state.assignments.map((asg) => {
             const member = members.find((m) => m.id === asg.userId);
             const pos = DESK_POSITION_INFO[asg.position];
@@ -155,7 +193,7 @@ export function CultoTab({
                     isCurrent ? 'bg-[#0095FF]/10' : isDone ? 'opacity-60' : ''
                   }`}
                 >
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-mono-tech font-medium text-zinc-300">
                         {item.plannedTime}
@@ -172,12 +210,59 @@ export function CultoTab({
 
                     <h3 className="text-base font-medium text-white">{item.title}</h3>
 
+                    {/* Ações diretas das duas versões Holyrics quando for música */}
                     {linkedSong && (
-                      <p className="text-xs text-emerald-400">
-                        {linkedSong.rawLyrics.trim()
-                          ? `Letra pronta (${linkedSong.title})`
-                          : `Aguardando letra em Músicas (${linkedSong.songCode})`}
-                      </p>
+                      <div className="pt-1">
+                        {linkedSong.rawLyrics.trim() ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleCopySong(linkedSong, 'two')}
+                              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5"
+                            >
+                              <Copy className="h-3.5 w-3.5 text-[#0095FF]" />
+                              <span>
+                                {copiedKey === `${linkedSong.id}-two`
+                                  ? 'Copiado!'
+                                  : 'Principal (2 linhas)'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSong(linkedSong, 'two')}
+                              aria-label={`Baixar ${linkedSong.title} 2 linhas`}
+                              className="inline-flex min-h-[38px] items-center rounded-lg border border-white/12 bg-[#0B0C0F] px-2 text-xs text-zinc-300 hover:bg-white/5"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void handleCopySong(linkedSong, 'one')}
+                              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 bg-[#0B0C0F] px-2.5 text-xs font-medium text-zinc-200 hover:bg-white/5"
+                            >
+                              <Copy className="h-3.5 w-3.5 text-[#F5C41E]" />
+                              <span>
+                                {copiedKey === `${linkedSong.id}-one`
+                                  ? 'Copiado!'
+                                  : 'Retorno / Studio (1 linha)'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSong(linkedSong, 'one')}
+                              aria-label={`Baixar ${linkedSong.title} 1 linha`}
+                              className="inline-flex min-h-[38px] items-center rounded-lg border border-white/12 bg-[#0B0C0F] px-2 text-xs text-zinc-300 hover:bg-white/5"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#F5C41E]">
+                            Aguardando Ministério de Música enviar a letra ({linkedSong.songCode})
+                          </p>
+                        )}
+                      </div>
                     )}
 
                     {itemMedia.map((m) => (
@@ -232,15 +317,14 @@ export function CultoTab({
           </div>
         </section>
 
-        {/* Lateral direita: Mídias de Gatilho Rápido + Baixar Holyrics + Aviso */}
+        {/* Lateral direita */}
         <section className="space-y-6 lg:col-span-4">
-          {/* Mídias sob demanda (Arranque, Esquete, Brincadeira, Quando solicitado) */}
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
             <h2 className="text-base font-semibold text-white">
               Mídias de gatilho rápido ({onDemandMedia.length})
             </h2>
             <p className="mt-1 text-xs text-zinc-400">
-              Arquivos marcados para Arranque, Esquete, Brincadeira ou Quando solicitado.
+              Arranque, Esquete, Brincadeira ou Quando solicitado.
             </p>
 
             {onDemandMedia.length === 0 ? (
@@ -263,11 +347,10 @@ export function CultoTab({
             )}
           </div>
 
-          {/* Baixar pacote Holyrics (.zip) */}
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
-            <h2 className="text-base font-semibold text-white">Baixar tudo para o Holyrics</h2>
+            <h2 className="text-base font-semibold text-white">Baixar pacote do Holyrics</h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Pasta compactada (.zip) com roteiro, notas, letras em .txt e mídias separadas por momento.
+              Pasta compactada (.zip) já com <span className="font-mono-tech">01 - 1 linha</span> (Retorno/Studio), <span className="font-mono-tech">02 - 2 linhas</span> (Principal), roteiro e mídias.
             </p>
 
             <button
@@ -287,7 +370,6 @@ export function CultoTab({
             )}
           </div>
 
-          {/* Aviso da mesa */}
           <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
             <h2 className="text-base font-semibold text-white">Aviso na mesa</h2>
             <textarea

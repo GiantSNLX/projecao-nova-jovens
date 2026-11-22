@@ -31,7 +31,7 @@ import { DevotionalTab } from './components/DevotionalTab';
 import { EscalasTab } from './components/EscalasTab';
 import { ConfiguracoesTab } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v4';
+const STORAGE_KEY = 'projecao-nova-jovens-v5';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
@@ -278,7 +278,8 @@ export function App() {
           { id: `s-${nextDate}-2`, position: 'PRINCIPAL', userId: 'usr-3', attendanceStatus: 'PENDING', servingOnDesk: false },
           { id: `s-${nextDate}-3`, position: 'RETORNO', userId: 'usr-4', attendanceStatus: 'PENDING', servingOnDesk: false },
           { id: `s-${nextDate}-4`, position: 'CORTE', userId: 'usr-5', attendanceStatus: 'PENDING', servingOnDesk: false },
-          { id: `s-${nextDate}-5`, position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-5`, position: 'STUDIO', userId: 'usr-10', attendanceStatus: 'PENDING', servingOnDesk: false },
+          { id: `s-${nextDate}-6`, position: 'APOIO', userId: 'usr-2', attendanceStatus: 'PENDING', servingOnDesk: false },
         ],
       };
 

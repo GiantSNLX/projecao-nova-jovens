@@ -34,7 +34,7 @@ import { DevotionalTab } from './components/DevotionalTab';
 import { EscalasTab, type NewSchedulePayload } from './components/EscalasTab';
 import { ConfiguracoesTab, type NewUserPayload } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v9';
+const STORAGE_KEY = 'projecao-nova-jovens-v10';
 const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {

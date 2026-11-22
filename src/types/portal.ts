@@ -141,9 +141,12 @@ export interface ServiceSong {
   addedBy: string;
 }
 
+export type MediaRoleLabel = 'VIDEO' | 'IMAGEM' | 'BG' | 'APRESENTACAO';
+
 export interface MediaAsset {
   id: string;
   runItemId?: string;
+  mediaRole?: MediaRoleLabel;
   displayTrigger: MediaDisplayTrigger;
   requestedBy?: string;
   note: string;
@@ -172,11 +175,12 @@ export interface SaturdayMdoRecord {
   id: string;
   userId: string;
   saturdayDate: string;
-  /** M — Dias meditados na semana (0 a 5, sendo 0 não feita e 5 feita) */
+  present: boolean;
+  /** M — Dias meditados na semana (0 a 5) */
   meditationDays: number;
   /** D — Versículos decorados (mínimo 5, máximo 70) */
   memorizedVerses: number;
-  /** O — Dias de oração (0 a 5, sendo 0 não feita e 5 feita) */
+  /** O — Dias de oração (0 a 5) */
   prayerDays: number;
   updatedAt?: string;
 }

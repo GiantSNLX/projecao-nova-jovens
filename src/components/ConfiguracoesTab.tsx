@@ -149,9 +149,6 @@ export function ConfiguracoesTab({
       <div className="flex flex-col gap-2 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Configurações</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Usuários, permissões por ministério, resoluções dos telões e prazo de envio.
-          </p>
         </div>
 
         <span
@@ -174,9 +171,6 @@ export function ConfiguracoesTab({
               <Users className="h-4 w-4 text-[#0095FF]" />
               <span>Usuários e Permissões</span>
             </h2>
-            <p className="mt-0.5 text-sm text-zinc-400">
-              Visualize quantas pessoas estão em cada ministério e gerencie acessos.
-            </p>
           </div>
           <span className="text-xs font-medium text-zinc-400">
             Total ativos: <AnimatedCounter value={counts.total} className="text-white" />

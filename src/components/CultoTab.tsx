@@ -264,9 +264,6 @@ export function CultoTab({
       <section className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Culto</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Confira as mídias e letras recebidas, teste nos três telões, solicite ajustes ou baixe tudo para o Holyrics.
-          </p>
         </div>
 
         <div className="w-full sm:w-auto sm:min-w-[320px]">

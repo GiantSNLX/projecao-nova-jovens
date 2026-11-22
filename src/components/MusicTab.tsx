@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   FileUp,
@@ -51,6 +53,7 @@ export function MusicTab({
   const [creatingNew, setCreatingNew] = useState(false);
 
   const [previewMode, setPreviewMode] = useState<'two' | 'one'>('two');
+  const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
   const [activeSlideKey, setActiveSlideKey] = useState<string | null>(null);
   const [slideNoteDraft, setSlideNoteDraft] = useState('');
 
@@ -64,6 +67,7 @@ export function MusicTab({
     setRawLyrics(selectedSong.rawLyrics);
     setNotes(selectedSong.notes ?? '');
     setSlideNotes(selectedSong.slideNotes ?? {});
+    setCurrentSlideIdx(0);
   }, [creatingNew, selectedSong]);
 
   const selectSong = (song: ServiceSong) => {
@@ -270,9 +274,6 @@ export function MusicTab({
       <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Músicas</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Suba o PDF, PPTX ou TXT (ou cole a letra). Veja como aparecerá nos telões do Culto e deixe avisos em slides específicos.
-          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -284,7 +285,7 @@ export function MusicTab({
                 ) : (
                   <FileUp className="h-4 w-4" />
                 )}
-                <span>{extractingDoc ? 'Lendo arquivo...' : 'Importar PDF / PPTX / TXT'}</span>
+                <span>{extractingDoc ? 'Lendo...' : 'Anexar PDF / PPTX / TXT'}</span>
                 <input
                   type="file"
                   accept=".pdf,.pptx,.txt"
@@ -397,13 +398,134 @@ export function MusicTab({
           </div>
         </section>
 
-        {/* Editor + Prévia por Slide (com nota por slide) */}
+        {/* Visualização dos slides + Dados da música */}
         <section className="space-y-5 rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-7">
-          <h2 className="text-base font-semibold text-white">
-            {creatingNew
-              ? 'Nova música'
-              : `${selectedSong?.songCode ?? ''} · Letra e notas para o Culto`}
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="section-title">
+              {creatingNew
+                ? 'Nova música'
+                : `${selectedSong?.songCode ?? ''} · ${title || selectedSong?.title || 'Música'}`}
+            </h2>
+          </div>
+
+          {/* Visualização principal de como vai ficar no telão */}
+          {previewSlides.length > 0 && (
+            <div className="space-y-3 rounded-xl border border-white/10 bg-[#08090C] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex rounded-lg border border-white/12 bg-[#12141A] p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewMode('two');
+                      setCurrentSlideIdx(0);
+                      setActiveSlideKey(null);
+                    }}
+                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
+                      previewMode === 'two'
+                        ? 'bg-[#0095FF] text-white'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Principal (2 linhas)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewMode('one');
+                      setCurrentSlideIdx(0);
+                      setActiveSlideKey(null);
+                    }}
+                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
+                      previewMode === 'one'
+                        ? 'bg-[#0095FF] text-white'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Retorno / Studio (1 linha)
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copyVersion(previewMode)}
+                    className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>{copiedVersion === previewMode ? 'Copiado' : 'Copiar'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadVersionTxt(previewMode)}
+                    className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>.TXT</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Telão simulando o slide ativo */}
+              {(() => {
+                const safeIdx = Math.min(currentSlideIdx, previewSlides.length - 1);
+                const activeSlideText = previewSlides[safeIdx];
+                const activeKey = `${previewMode}-${safeIdx}`;
+                const activeNote = slideNotes[activeKey];
+                return (
+                  <div className="space-y-2.5">
+                    <div className="relative flex aspect-video max-h-[210px] w-full flex-col items-center justify-center rounded-lg border border-[#0095FF]/35 bg-black px-6 text-center">
+                      <span className="font-mono-tech absolute top-2.5 left-3 text-[11px] text-zinc-500">
+                        Slide {safeIdx + 1}/{previewSlides.length}
+                      </span>
+                      <p className="text-lg font-semibold whitespace-pre-line text-white sm:text-2xl">
+                        {activeSlideText}
+                      </p>
+                      {activeNote && (
+                        <span className="mt-2 rounded bg-[#F5C41E]/15 px-2.5 py-0.5 text-xs text-[#F5C41E]">
+                          Nota: {activeNote}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        disabled={safeIdx === 0}
+                        onClick={() => setCurrentSlideIdx((i) => Math.max(0, i - 1))}
+                        className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span>Anterior</span>
+                      </button>
+
+                      {canEditMusic && !isFrozen && (
+                        <button
+                          type="button"
+                          onClick={() => openSlideNoteEditor(activeKey)}
+                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-[#38BDF8] hover:bg-white/5"
+                        >
+                          <MessageSquarePlus className="h-3.5 w-3.5" />
+                          <span>{activeNote ? 'Editar nota do slide' : 'Nota neste slide'}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={safeIdx >= previewSlides.length - 1}
+                        onClick={() =>
+                          setCurrentSlideIdx((i) => Math.min(previewSlides.length - 1, i + 1))
+                        }
+                        className="btn-rb-surface inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 disabled:opacity-40"
+                      >
+                        <span>Próximo</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           <form onSubmit={handleSave} className="space-y-3">
             <div>
@@ -424,23 +546,23 @@ export function MusicTab({
 
             <div>
               <label htmlFor="m-lyrics" className="block text-sm font-medium text-zinc-300">
-                Letra fiel (sem título dentro, mantendo repetições e ordem exata)
+                Letra
               </label>
               <textarea
                 id="m-lyrics"
-                rows={5}
+                rows={4}
                 required
                 disabled={!canEditMusic || isFrozen}
                 value={rawLyrics}
                 onChange={(e) => setRawLyrics(e.target.value)}
-                placeholder="Cole a letra ou importe o PDF/PPTX/TXT acima..."
+                placeholder="Anexe o arquivo acima ou cole a letra aqui..."
                 className="mt-1 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 disabled:opacity-60"
               />
             </div>
 
             <div>
               <label htmlFor="m-notes" className="block text-sm font-medium text-zinc-300">
-                Observação ou pedido para a Projeção (opcional)
+                Observação (opcional)
               </label>
               <input
                 id="m-notes"
@@ -448,7 +570,7 @@ export function MusicTab({
                 disabled={!canEditMusic || isFrozen}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex.: Repetir o coro 2x no final se o dirigente puxar..."
+                placeholder="Ex.: Repetir o coro 2x no final"
                 className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 disabled:opacity-60"
               />
             </div>
@@ -459,93 +581,44 @@ export function MusicTab({
                 className="btn-rb-primary inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                <span>Salvar e enviar para o Culto</span>
+                <span>Salvar</span>
               </button>
             )}
           </form>
 
-          {/* Pré-visualização real de como vai ficar no Culto + Nota por slide específico */}
+          {/* Todos os slides (clique para selecionar e adicionar nota) */}
           {previewSlides.length > 0 && (
-            <div className="border-t border-white/10 pt-4 space-y-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex rounded-lg border border-white/12 bg-[#0B0C0F] p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewMode('two');
-                      setActiveSlideKey(null);
-                    }}
-                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
-                      previewMode === 'two'
-                        ? 'bg-[#0095FF] text-white'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Principal (2 linhas)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewMode('one');
-                      setActiveSlideKey(null);
-                    }}
-                    className={`min-h-[38px] rounded-md px-3 text-xs font-semibold ${
-                      previewMode === 'one'
-                        ? 'bg-[#0095FF] text-white'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Retorno / Studio (1 linha)
-                  </button>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void copyVersion(previewMode)}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 hover:bg-white/5"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    <span>{copiedVersion === previewMode ? 'Copiado' : 'Copiar'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadVersionTxt(previewMode)}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 hover:bg-white/5"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    <span>.TXT</span>
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-xs text-zinc-400">
-                Prévia de como aparecerá no telão. Toque em um slide para deixar uma nota específica para a mesa.
-              </p>
-
+            <div className="border-t border-white/10 pt-4 space-y-2.5">
               <div className="grid gap-2.5 sm:grid-cols-2">
                 {previewSlides.map((slideText, idx) => {
                   const slideKey = `${previewMode}-${idx}`;
                   const existingNote = slideNotes[slideKey];
                   const isEditingThis = activeSlideKey === slideKey;
+                  const isActiveSlide = idx === Math.min(currentSlideIdx, previewSlides.length - 1);
 
                   return (
                     <div
                       key={slideKey}
-                      className={`rounded-lg border p-3 transition ${
-                        existingNote
-                          ? 'border-[#F5C41E]/45 bg-[#08090C]'
-                          : 'border-white/10 bg-[#08090C]'
+                      onClick={() => setCurrentSlideIdx(idx)}
+                      className={`cursor-pointer rounded-lg border p-3 transition ${
+                        isActiveSlide
+                          ? 'border-[#0095FF]/60 bg-[#0095FF]/8'
+                          : existingNote
+                            ? 'border-[#F5C41E]/45 bg-[#08090C]'
+                            : 'border-white/10 bg-[#08090C] hover:border-white/25'
                       }`}
                     >
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="font-mono-tech text-[11px] text-zinc-500">
+                        <span className="font-mono-tech text-[11px] text-zinc-400">
                           Slide {idx + 1}
                         </span>
                         {canEditMusic && !isFrozen && (
                           <button
                             type="button"
-                            onClick={() => openSlideNoteEditor(slideKey)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSlideNoteEditor(slideKey);
+                            }}
                             className="inline-flex items-center gap-1 text-[11px] font-medium text-[#38BDF8] hover:underline"
                           >
                             <MessageSquarePlus className="h-3 w-3" />
@@ -554,23 +627,23 @@ export function MusicTab({
                         )}
                       </div>
 
-                      <div className="flex min-h-[68px] items-center justify-center rounded border border-white/8 bg-black px-3 py-2.5 text-center text-sm font-medium whitespace-pre-line text-white">
+                      <div className="flex min-h-[60px] items-center justify-center rounded border border-white/8 bg-black px-3 py-2 text-center text-sm font-medium whitespace-pre-line text-white">
                         {slideText}
                       </div>
 
                       {existingNote && !isEditingThis && (
                         <p className="mt-2 rounded bg-[#F5C41E]/10 px-2 py-1 text-xs text-[#F5C41E]">
-                          Nota: {existingNote}
+                          {existingNote}
                         </p>
                       )}
 
                       {isEditingThis && (
-                        <div className="mt-2 space-y-2">
+                        <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="text"
                             value={slideNoteDraft}
                             onChange={(e) => setSlideNoteDraft(e.target.value)}
-                            placeholder="Ex.: Pular este slide se não repetir..."
+                            placeholder="Nota para a projeção..."
                             className="min-h-[38px] w-full rounded border border-white/15 bg-[#12141A] px-2.5 text-xs text-white focus:border-[#0095FF] focus:outline-none"
                           />
                           <div className="flex justify-end gap-1.5">
@@ -586,7 +659,7 @@ export function MusicTab({
                               onClick={() => saveSlideNote(slideKey)}
                               className="rounded bg-[#0095FF] px-2.5 py-1 text-xs font-semibold text-white"
                             >
-                              Salvar nota
+                              Salvar
                             </button>
                           </div>
                         </div>

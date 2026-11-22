@@ -22,11 +22,11 @@ interface HeaderProps {
 
 const NAV_ITEMS: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: 'inicio', label: 'Início', icon: Home },
-  { id: 'programacao', label: 'Programação e Mídias', icon: MonitorPlay },
   { id: 'musicas', label: 'Músicas', icon: Music },
+  { id: 'programacao', label: 'Programação e Mídias', icon: MonitorPlay },
   { id: 'culto', label: 'Culto', icon: Radio },
+  { id: 'meditacao', label: 'Controle de Meditação', icon: BookOpen },
   { id: 'escalas', label: 'Escalas', icon: CalendarDays },
-  { id: 'meditacao', label: 'MDO', icon: BookOpen },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 

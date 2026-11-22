@@ -208,13 +208,6 @@ export function EscalasTab({
       <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Escalas</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            {activeSubTab === 'ver'
-              ? 'Veja os eventos de cada sábado (auditório ou salas) e confirme somente a sua escala.'
-              : activeSubTab === 'montar'
-                ? 'Monte a escala, adicione mais de uma programação no mesmo dia e controle o rodízio.'
-                : 'Cultos anteriores e arquivados para consulta da equipe.'}
-          </p>
         </div>
 
         <div className="inline-flex flex-wrap rounded-lg border border-white/12 bg-[#12141A] p-1">
@@ -518,20 +511,16 @@ export function EscalasTab({
             <div className="border-b border-white/10 pb-4 space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="section-title">
                     Montar escala — {formatDateBr(activeSchedule.date)}
                   </h2>
-                  <p className="text-sm text-zinc-400">
-                    Adicione mais de uma escala/programação no mesmo culto e alterne entre elas ao lado.
-                  </p>
                 </div>
 
-                {/* Área superior direita destacada: adicionar escala/programação no mesmo dia + trocar + arquivar */}
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <button
                     type="button"
                     onClick={handleQuickAddParallelOnSameDay}
-                    className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg bg-[#0095FF] px-3.5 text-xs font-semibold text-white hover:bg-[#0082E0]"
+                    className="btn-rb-primary inline-flex min-h-[42px] items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold text-white"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Programação neste culto</span>
@@ -540,7 +529,7 @@ export function EscalasTab({
                   <button
                     type="button"
                     onClick={() => onToggleArchiveSchedule(activeSchedule.id, true)}
-                    className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5"
+                    className="btn-rb-surface inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300"
                   >
                     <Archive className="h-3.5 w-3.5 text-zinc-400" />
                     <span>Arquivar</span>

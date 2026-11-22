@@ -337,10 +337,7 @@ export function StageSimulator({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">Prévia nos 3 telões (16:9)</h2>
-          <p className="text-xs text-zinc-400">
-            Confira enquadramento antes de enviar para o culto.
-          </p>
+          <h2 className="section-title">Prévia nos 3 telões</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

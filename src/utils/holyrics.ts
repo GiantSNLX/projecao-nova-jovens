@@ -307,7 +307,7 @@ export async function generateAndDownloadHolyricsZip(
     `========================================================`,
     `PORTAL PROJEÇÃO NOVA JOVENS 2 — ROTEIRO PARA HOLYRICS`,
     `Culto: ${state.title} | Data: ${state.serviceDate} (${state.startsAtTime})`,
-    `Programação: ${teamInfo.name} (${teamInfo.phonetic})`,
+    `Programação: ${teamInfo.name} (${teamInfo.subtitle})`,
     `Telões: Central 3840x2160 (16:9) | Laterais 3200x1800 (16:9)`,
     `========================================================`,
     '',

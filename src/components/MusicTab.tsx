@@ -1,19 +1,12 @@
 import { useState } from 'react';
-import {
-  CheckCircle2,
-  Download,
-  FileText,
-  Music,
-  Plus,
-  Trash2,
-  Wand2,
-} from 'lucide-react';
-import type { Role, ServiceSong } from '../types/portal';
+import { CheckCircle2, Download, Plus, Trash2 } from 'lucide-react';
+import type { ServiceSong } from '../types/portal';
 import { formatLyricsForHolyrics, sanitizeSlug } from '../utils/holyrics';
 
 interface MusicTabProps {
   songs: ServiceSong[];
-  activeRole: Role;
+  canEditMusic: boolean;
+  canApprove: boolean;
   activeUserName: string;
   isFrozen: boolean;
   onAddSong: (song: Omit<ServiceSong, 'id' | 'orderIndex'>) => void;
@@ -23,23 +16,19 @@ interface MusicTabProps {
 
 export function MusicTab({
   songs,
-  activeRole,
+  canEditMusic,
+  canApprove,
   activeUserName,
   isFrozen,
   onAddSong,
   onToggleApproveSong,
   onRemoveSong,
 }: MusicTabProps) {
-  const canEditMusic =
-    activeRole === 'ADMIN' || activeRole === 'CAPTAIN' || activeRole === 'MUSIC';
-  const canApprove = activeRole === 'ADMIN' || activeRole === 'CAPTAIN';
-
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [key, setKey] = useState('G');
   const [bpm, setBpm] = useState('72');
   const [rawLyrics, setRawLyrics] = useState('');
-  const [notes, setNotes] = useState('');
   const [selectedSongId, setSelectedSongId] = useState<string>(songs[0]?.id ?? '');
   const [batchText, setBatchText] = useState('');
 
@@ -59,14 +48,12 @@ export function MusicTab({
       rawLyrics: rawLyrics.trim(),
       holyricsTxt,
       approved: false,
-      notes: notes.trim() || undefined,
       addedBy: activeUserName,
     });
 
     setTitle('');
     setArtist('');
     setRawLyrics('');
-    setNotes('');
   };
 
   const handleBatchImport = () => {
@@ -79,13 +66,13 @@ export function MusicTab({
     for (const line of lines) {
       const [songTitle, songArtist = '', songKey = ''] = line.split('-').map((p) => p.trim());
       if (!songTitle) continue;
-      const sampleBody = `[Verso 1]\nLetra pendente de conferência para ${songTitle}\n\n[Coro]\nInserir estrofes antes do Cutoff`;
+      const body = `[Verso 1]\nInserir letra de ${songTitle}\n\n[Coro]\nSeparar blocos por linha vazia`;
       onAddSong({
         title: songTitle,
         artist: songArtist,
         key: songKey || 'C',
-        rawLyrics: sampleBody,
-        holyricsTxt: formatLyricsForHolyrics(sampleBody, songTitle, songArtist, songKey || 'C'),
+        rawLyrics: body,
+        holyricsTxt: formatLyricsForHolyrics(body, songTitle, songArtist, songKey || 'C'),
         approved: false,
         addedBy: activeUserName,
       });
@@ -106,23 +93,22 @@ export function MusicTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <div className="border-b border-white/10 pb-5">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Músicas</h1>
+        <p className="mt-1 text-sm text-zinc-400">
+          Importe as músicas da semana. O sistema já formata os blocos no padrão de slides do Holyrics.
+        </p>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Import Form */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 lg:col-span-5 dark:border-white/10 dark:bg-[#12151C]">
-          <div className="flex items-center gap-2">
-            <Music className="h-5 w-5 text-[#0095FF]" />
-            <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">
-              Importar Músicas da Semana
-            </h2>
-          </div>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            As letras são quebradas automaticamente em blocos de 2 a 4 linhas no padrão Widescreen do Holyrics.
-          </p>
+        {/* Form */}
+        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-5">
+          <h2 className="text-base font-semibold text-white">Adicionar música</h2>
 
           <form onSubmit={handleSubmitSingle} className="mt-4 space-y-3">
             <div>
-              <label htmlFor="song-title" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="song-title" className="block text-sm font-medium text-zinc-300">
                 Nome da música
               </label>
               <input
@@ -133,13 +119,13 @@ export function MusicTab({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex.: Santo Pra Sempre"
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-1">
-                <label htmlFor="song-key" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label htmlFor="song-key" className="block text-sm font-medium text-zinc-300">
                   Tom
                 </label>
                 <input
@@ -148,11 +134,11 @@ export function MusicTab({
                   disabled={!canEditMusic || isFrozen}
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
                 />
               </div>
-              <div className="sm:col-span-1">
-                <label htmlFor="song-bpm" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <div>
+                <label htmlFor="song-bpm" className="block text-sm font-medium text-zinc-300">
                   BPM
                 </label>
                 <input
@@ -161,12 +147,12 @@ export function MusicTab({
                   disabled={!canEditMusic || isFrozen}
                   value={bpm}
                   onChange={(e) => setBpm(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
                 />
               </div>
-              <div className="sm:col-span-1">
-                <label htmlFor="song-artist" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Ministro/Banda
+              <div>
+                <label htmlFor="song-artist" className="block text-sm font-medium text-zinc-300">
+                  Banda
                 </label>
                 <input
                   id="song-artist"
@@ -175,14 +161,14 @@ export function MusicTab({
                   value={artist}
                   onChange={(e) => setArtist(e.target.value)}
                   placeholder="Opcional"
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="song-lyrics" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Letra (separe estrofes com uma linha vazia)
+              <label htmlFor="song-lyrics" className="block text-sm font-medium text-zinc-300">
+                Letra (deixe uma linha vazia entre estrofes)
               </label>
               <textarea
                 id="song-lyrics"
@@ -192,43 +178,24 @@ export function MusicTab({
                 value={rawLyrics}
                 onChange={(e) => setRawLyrics(e.target.value)}
                 placeholder={'[Verso 1]\nLinha 1\nLinha 2\n\n[Coro]\nLinha 1\nLinha 2'}
-                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="song-notes" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Observação para a mesa
-              </label>
-              <input
-                id="song-notes"
-                type="text"
-                disabled={!canEditMusic || isFrozen}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex.: Repetir o refrão no final"
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                className="mt-1 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
               />
             </div>
 
             <button
               type="submit"
               disabled={!canEditMusic || isFrozen}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0080DC] disabled:opacity-45"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0] disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
-              <span>Adicionar Música ao Culto</span>
+              <span>Importar música</span>
             </button>
           </form>
 
-          {/* Batch quick import */}
-          <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-white/10">
-            <label htmlFor="batch-songs" className="block text-sm font-semibold text-zinc-900 dark:text-white">
-              Importação rápida em lote (1 por linha)
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <label htmlFor="batch-songs" className="block text-sm font-medium text-zinc-300">
+              Ou colar lista rápida (Título - Banda - Tom)
             </label>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Formato: <span className="font-mono-tech">Título - Artista - Tom</span>
-            </p>
             <textarea
               id="batch-songs"
               rows={3}
@@ -236,114 +203,104 @@ export function MusicTab({
               value={batchText}
               onChange={(e) => setBatchText(e.target.value)}
               placeholder={'Milagre - Morada - D\nVitorioso És - Gabriel Guedes - A'}
-              className="mt-2 w-full rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+              className="mt-1.5 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none disabled:opacity-50"
             />
             <button
               type="button"
               disabled={!canEditMusic || isFrozen || !batchText.trim()}
               onClick={handleBatchImport}
-              className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 disabled:opacity-45 dark:border-white/15 dark:text-white dark:hover:bg-white/10"
+              className="mt-2 min-h-[44px] w-full rounded-lg border border-white/12 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-40"
             >
-              <Wand2 className="h-4 w-4 text-[#0095FF]" />
-              <span>Importar Lista</span>
+              Importar lista
             </button>
           </div>
         </section>
 
-        {/* Songs List & Holyrics TXT Preview */}
+        {/* Songs list & preview */}
         <section className="space-y-6 lg:col-span-7">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-white/10 dark:bg-[#12151C]">
-            <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">
-              Repertório da Semana ({songs.length} músicas)
-            </h3>
-
-            <div className="mt-4 space-y-2.5">
-              {songs
-                .slice()
-                .sort((a, b) => a.orderIndex - b.orderIndex)
-                .map((song) => (
+          <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
+            {songs
+              .slice()
+              .sort((a, b) => a.orderIndex - b.orderIndex)
+              .map((song) => {
+                const isSelected = selectedSong?.id === song.id;
+                return (
                   <div
                     key={song.id}
                     onClick={() => setSelectedSongId(song.id)}
-                    className={`cursor-pointer rounded-xl border p-3.5 transition-colors ${
-                      selectedSong?.id === song.id
-                        ? 'border-[#0095FF] bg-[#0095FF]/10'
-                        : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 dark:border-white/10 dark:bg-[#171B24] dark:hover:bg-[#1D222E]'
+                    className={`flex cursor-pointer flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center sm:justify-between ${
+                      isSelected ? 'bg-[#0095FF]/10' : 'hover:bg-white/[0.03]'
                     }`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono-tech rounded bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-white dark:bg-white/10">
-                            {String(song.orderIndex).padStart(2, '0')}
-                          </span>
-                          <span className="text-base font-semibold text-zinc-950 dark:text-white">
-                            {song.title}
-                          </span>
-                          <span className="font-mono-tech rounded border border-zinc-300 px-1.5 py-0.5 text-xs dark:border-white/15 dark:text-zinc-300">
-                            Tom {song.key}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                          {song.artist || 'Artista não informado'} · Enviado por {song.addedBy}
-                        </p>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono-tech text-xs text-zinc-500">
+                          {String(song.orderIndex).padStart(2, '0')}
+                        </span>
+                        <span className="text-base font-medium text-white">{song.title}</span>
+                        <span className="font-mono-tech text-xs text-zinc-400">
+                          Tom {song.key}
+                        </span>
                       </div>
+                      <p className="mt-0.5 text-sm text-zinc-400">
+                        {song.artist || 'Sem artista'} · {song.addedBy}
+                      </p>
+                    </div>
 
-                      <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex flex-wrap items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => downloadSingleTxt(song)}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 hover:bg-white/5"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>.TXT</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!canApprove}
+                        onClick={() => onToggleApproveSong(song.id)}
+                        className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-xs font-semibold disabled:opacity-60 ${
+                          song.approved
+                            ? 'border border-emerald-500/35 bg-emerald-500/12 text-emerald-300'
+                            : 'border border-[#F5C41E]/35 bg-[#F5C41E]/12 text-[#F5C41E]'
+                        }`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>{song.approved ? 'Aprovada' : 'Aprovar'}</span>
+                      </button>
+
+                      {canEditMusic && !isFrozen && (
                         <button
                           type="button"
-                          onClick={() => downloadSingleTxt(song)}
-                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/10"
+                          aria-label={`Remover ${song.title}`}
+                          onClick={() => onRemoveSong(song.id)}
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:border-red-500/40 hover:text-red-400"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          <span>.TXT</span>
+                          <Trash2 className="h-4 w-4" />
                         </button>
-
-                        <button
-                          type="button"
-                          disabled={!canApprove}
-                          onClick={() => onToggleApproveSong(song.id)}
-                          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-xs font-semibold disabled:opacity-60 ${
-                            song.approved
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : 'bg-[#F5C41E]/15 text-[#F5C41E]'
-                          }`}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>{song.approved ? 'Aprovada' : 'Aprovar'}</span>
-                        </button>
-
-                        {canEditMusic && !isFrozen && (
-                          <button
-                            type="button"
-                            aria-label={`Remover ${song.title}`}
-                            onClick={() => onRemoveSong(song.id)}
-                            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                ))}
-            </div>
+                );
+              })}
           </div>
 
           {selectedSong && (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-white/10 dark:bg-[#12151C]">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-[#0095FF]" />
-                  <h3 className="text-base font-semibold text-zinc-950 dark:text-white">
-                    Prévia .TXT para Importação no Holyrics
-                  </h3>
-                </div>
-                <span className="font-mono-tech text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="rounded-xl border border-white/10 bg-[#12141A] p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-white">
+                  Arquivo Holyrics ({selectedSong.title})
+                </span>
+                <span className="font-mono-tech text-xs text-zinc-400">
                   {String(selectedSong.orderIndex).padStart(2, '0')}_{sanitizeSlug(selectedSong.title)}.txt
                 </span>
               </div>
-              <pre className="font-mono-tech mt-3 max-h-80 overflow-auto rounded-xl border border-zinc-800 bg-[#08090C] p-4 text-sm whitespace-pre-wrap text-zinc-100">
+              <pre className="font-mono-tech mt-3 max-h-72 overflow-auto rounded-lg border border-white/8 bg-[#0B0C0F] p-3.5 text-sm whitespace-pre-wrap text-zinc-200">
                 {selectedSong.holyricsTxt}
               </pre>
             </div>

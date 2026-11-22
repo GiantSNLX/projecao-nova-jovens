@@ -35,16 +35,18 @@ export type ScreenCode = 'LEFT' | 'CENTER' | 'RIGHT';
 export type ScreenTarget = 'ALL' | 'CENTER' | 'SIDES' | 'LEFT' | 'RIGHT';
 
 export type TabId =
-  | 'escala'
-  | 'aovivo'
+  | 'inicio'
   | 'musicas'
   | 'programacao'
-  | 'devocional'
-  | 'holyrics'
-  | 'governanca';
+  | 'culto'
+  | 'meditacao'
+  | 'escalas'
+  | 'configuracoes';
 
 export interface MemberUser {
   id: string;
+  senibId: string;
+  pin: string;
   name: string;
   ministry: string;
   roles: Role[];

@@ -9,8 +9,8 @@ import type {
   LiveItemStatus,
   MdoEntry,
   MediaAsset,
+  MemberUser,
   ProgrammingTeam,
-  Role,
   RunItem,
   SaturdayVerseRecord,
   ScreenCode,
@@ -18,17 +18,19 @@ import type {
   ServiceState,
   TabId,
 } from './types/portal';
+import { LoginScreen } from './components/LoginScreen';
 import { Header } from './components/Header';
 import { MobileNav } from './components/MobileNav';
-import { OverviewDeskTab } from './components/OverviewDeskTab';
-import { LiveControlTab } from './components/LiveControlTab';
+import { InicioTab } from './components/InicioTab';
 import { MusicTab } from './components/MusicTab';
 import { ProgrammingTab } from './components/ProgrammingTab';
+import { CultoTab } from './components/CultoTab';
 import { DevotionalTab } from './components/DevotionalTab';
-import { HolyricsExportTab } from './components/HolyricsExportTab';
-import { GovernanceTab } from './components/GovernanceTab';
+import { EscalasTab } from './components/EscalasTab';
+import { ConfiguracoesTab } from './components/ConfiguracoesTab';
 
-const STORAGE_KEY = 'projecao-nova-jovens-v1';
+const STORAGE_KEY = 'projecao-nova-jovens-v2';
+const SESSION_KEY = 'projecao-nova-jovens-session';
 
 function loadInitialState(): ServiceState {
   try {
@@ -42,47 +44,60 @@ function loadInitialState(): ServiceState {
   }
 }
 
+function loadSessionUser(): MemberUser | null {
+  try {
+    const userId = localStorage.getItem(SESSION_KEY);
+    if (!userId) return null;
+    return INITIAL_MEMBERS.find((m) => m.id === userId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   const [state, setState] = useState<ServiceState>(loadInitialState);
-  const [activeTab, setActiveTab] = useState<TabId>('escala');
-  const [activeUserId, setActiveUserId] = useState<string>(INITIAL_MEMBERS[0].id);
-  const [activeRole, setActiveRole] = useState<Role>('CAPTAIN');
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('projecao-theme');
-      return saved ? saved === 'dark' : true;
-    } catch {
-      return true;
-    }
-  });
+  const [activeUser, setActiveUser] = useState<MemberUser | null>(loadSessionUser);
+  const [activeTab, setActiveTab] = useState<TabId>('inicio');
 
-  // In-memory map of actual uploaded binary File objects for real .zip packaging
   const uploadedFilesRef = useRef<Map<string, File>>(new Map());
 
-  const activeUser =
-    INITIAL_MEMBERS.find((u) => u.id === activeUserId) ?? INITIAL_MEMBERS[0];
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-    try {
-      localStorage.setItem('projecao-theme', isDark ? 'dark' : 'light');
-    } catch {
-      // ignore
-    }
-  }, [isDark]);
-
   useEffect(() => {
     try {
-      // Strip transient blob objectUrls before persisting JSON
       const serializable: ServiceState = {
         ...state,
         mediaAssets: state.mediaAssets.map(({ objectUrl: _omit, ...rest }) => rest),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
     } catch {
-      // ignore storage quota errors
+      // ignore storage errors
     }
   }, [state]);
+
+  if (!activeUser) {
+    return (
+      <LoginScreen
+        members={INITIAL_MEMBERS}
+        onLoginSuccess={(member) => {
+          setActiveUser(member);
+          setActiveTab('inicio');
+          try {
+            localStorage.setItem(SESSION_KEY, member.id);
+          } catch {
+            // ignore
+          }
+        }}
+      />
+    );
+  }
+
+  const isLeader =
+    activeUser.roles.includes('ADMIN') || activeUser.roles.includes('CAPTAIN');
+  const canEditMusic = isLeader || activeUser.roles.includes('MUSIC');
+  const canEditProgramming = isLeader || activeUser.roles.includes('PROGRAMMING');
+  const canOperateDesk =
+    isLeader ||
+    state.assignments.some((a) => a.userId === activeUser.id) ||
+    activeUser.roles.includes('MEMBER');
 
   const nowTime = () =>
     new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -95,17 +110,18 @@ export function App() {
     id: `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     timestamp: nowTime(),
     actorName: activeUser.name,
-    actorRole: activeRole,
+    actorRole: activeUser.roles[0] ?? 'MEMBER',
     action,
     detail,
     reason,
   });
 
-  const handleChangeUser = (userId: string) => {
-    setActiveUserId(userId);
-    const found = INITIAL_MEMBERS.find((m) => m.id === userId);
-    if (found && found.roles.length > 0) {
-      setActiveRole(found.roles[0]);
+  const handleLogout = () => {
+    setActiveUser(null);
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      // ignore
     }
   };
 
@@ -131,8 +147,8 @@ export function App() {
         ),
         auditLogs: [
           makeAudit(
-            'ATTENDANCE_UPDATED',
-            `Presença de ${target?.position ?? ''} alterada para ${status}.`,
+            'Presença',
+            `atualizou presença em ${target?.position ?? ''} para ${status === 'CONFIRMED' ? 'Confirmado' : status === 'DECLINED' ? 'Ausente' : 'Pendente'}.`,
           ),
           ...prev.auditLogs,
         ],
@@ -158,8 +174,8 @@ export function App() {
         ),
         auditLogs: [
           makeAudit(
-            'DESK_CHECKIN',
-            `${nextServing ? 'Entrou' : 'Saiu'} da posição ${target?.position ?? ''} na mesa.`,
+            'Mesa',
+            `${nextServing ? 'entrou na' : 'saiu da'} posição ${target?.position ?? ''}.`,
           ),
           ...prev.auditLogs,
         ],
@@ -183,10 +199,7 @@ export function App() {
           : a,
       ),
       auditLogs: [
-        makeAudit(
-          'ASSIGNMENT_CHANGED',
-          `Escala atualizada para ${member?.name ?? userId}.`,
-        ),
+        makeAudit('Escala', `escalou ${member?.name ?? userId}.`),
         ...prev.auditLogs,
       ],
     }));
@@ -197,7 +210,7 @@ export function App() {
       ...prev,
       programmingTeam: team,
       auditLogs: [
-        makeAudit('PROGRAMMING_TEAM_CHANGED', `Equipe da semana definida como ${team}.`),
+        makeAudit('Programação', `definiu equipe da semana como ${team}.`),
         ...prev.auditLogs,
       ],
     }));
@@ -215,7 +228,6 @@ export function App() {
             liveFinishedAt: status === 'DONE' ? nowTime() : item.liveFinishedAt,
           };
         }
-        // If putting another block on air, mark previous CURRENT as DONE
         if (status === 'CURRENT' && item.liveStatus === 'CURRENT') {
           return { ...item, liveStatus: 'DONE', liveFinishedAt: nowTime() };
         }
@@ -232,10 +244,7 @@ export function App() {
         status: nextLive ? 'LIVE' : 'APPROVED',
         liveStartedAt: nextLive ? nowTime() : prev.liveStartedAt,
         auditLogs: [
-          makeAudit(
-            nextLive ? 'SERVICE_LIVE_STARTED' : 'SERVICE_LIVE_ENDED',
-            nextLive ? 'Culto iniciado em modo Ao Vivo.' : 'Modo Ao Vivo encerrado.',
-          ),
+          makeAudit('Culto', nextLive ? 'iniciou o culto ao vivo.' : 'encerrou o modo ao vivo.'),
           ...prev.auditLogs,
         ],
       };
@@ -246,10 +255,7 @@ export function App() {
     setState((prev) => ({
       ...prev,
       liveNotes: notes,
-      auditLogs: [
-        makeAudit('LIVE_NOTES_UPDATED', 'Recado operacional da mesa atualizado.'),
-        ...prev.auditLogs,
-      ],
+      auditLogs: [makeAudit('Mesa', 'atualizou o aviso da mesa.'), ...prev.auditLogs],
     }));
   };
 
@@ -264,10 +270,7 @@ export function App() {
           orderIndex: prev.songs.length + 1,
         },
       ],
-      auditLogs: [
-        makeAudit('SONG_ADDED', `Música "${songData.title}" adicionada ao culto.`),
-        ...prev.auditLogs,
-      ],
+      auditLogs: [makeAudit('Música', `adicionou "${songData.title}".`), ...prev.auditLogs],
     }));
   };
 
@@ -299,10 +302,7 @@ export function App() {
           liveStatus: 'PENDING',
         },
       ],
-      auditLogs: [
-        makeAudit('RUN_ITEM_ADDED', `Bloco "${item.title}" inserido no roteiro.`),
-        ...prev.auditLogs,
-      ],
+      auditLogs: [makeAudit('Roteiro', `adicionou "${item.title}".`), ...prev.auditLogs],
     }));
   };
 
@@ -320,10 +320,7 @@ export function App() {
           liveStatus: 'PENDING' as const,
         })),
       ],
-      auditLogs: [
-        makeAudit('RUN_BATCH_IMPORTED', `${items.length} blocos importados no roteiro.`),
-        ...prev.auditLogs,
-      ],
+      auditLogs: [makeAudit('Roteiro', `importou ${items.length} blocos.`), ...prev.auditLogs],
     }));
   };
 
@@ -335,10 +332,7 @@ export function App() {
       ...prev,
       mediaAssets: [asset, ...prev.mediaAssets],
       auditLogs: [
-        makeAudit(
-          'MEDIA_UPLOADED',
-          `Mídia "${asset.normalizedFilename}" enviada (${asset.validationStatus}).`,
-        ),
+        makeAudit('Mídia', `enviou "${asset.normalizedFilename}".`),
         ...prev.auditLogs,
       ],
     }));
@@ -369,10 +363,6 @@ export function App() {
         mdoEntries: exists
           ? prev.mdoEntries.map((m) => (m.id === entry.id ? entry : m))
           : [...prev.mdoEntries, entry],
-        auditLogs: [
-          makeAudit('MDO_SAVED', `MDO de ${entry.dayLabel} registrado.`),
-          ...prev.auditLogs,
-        ],
       };
     });
   };
@@ -387,24 +377,18 @@ export function App() {
           ? prev.saturdayVerses.map((v) => (v.id === record.id ? record : v))
           : [...prev.saturdayVerses, record],
         auditLogs: [
-          makeAudit(
-            'VERSE_SPOKEN',
-            `Versículo falado para ${listener?.name ?? 'Líder'} (${record.verseReference}).`,
-          ),
+          makeAudit('Versículos', `falou versículos para ${listener?.name ?? 'líder'}.`),
           ...prev.auditLogs,
         ],
       };
     });
   };
 
-  const handlePackageGenerated = (zipName: string, count: number) => {
+  const handlePackageGenerated = (zipName: string) => {
     setState((prev) => ({
       ...prev,
       auditLogs: [
-        makeAudit(
-          'PACKAGE_GENERATED',
-          `Pacote Holyrics "${zipName}" gerado com ${count} itens.`,
-        ),
+        makeAudit('Holyrics', `baixou pacote ${zipName}.`),
         ...prev.auditLogs,
       ],
     }));
@@ -427,8 +411,8 @@ export function App() {
         isFrozen: nextFrozen,
         auditLogs: [
           makeAudit(
-            nextFrozen ? 'CUTOFF_FROZEN' : 'CUTOFF_OVERRIDE',
-            nextFrozen ? 'Envios travados pelo Cutoff.' : 'Envios reabertos por exceção.',
+            'Prazo',
+            nextFrozen ? 'travou os envios da semana.' : 'reabriu os envios da semana.',
             reason,
           ),
           ...prev.auditLogs,
@@ -438,52 +422,31 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-[#0A0B0E] dark:text-[#F5F6F8]">
+    <div className="min-h-screen bg-[#0B0C0F] text-[#F4F5F7]">
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
         activeUser={activeUser}
-        activeRole={activeRole}
-        users={INITIAL_MEMBERS}
-        onChangeUser={handleChangeUser}
-        onChangeRole={setActiveRole}
-        programmingTeam={state.programmingTeam}
-        serviceDate={state.serviceDate}
-        isDark={isDark}
-        onToggleTheme={() => setIsDark((d) => !d)}
-        onResetDemo={handleResetDemo}
+        isLeader={isLeader}
+        onLogout={handleLogout}
       />
 
-      <main className="mx-auto max-w-[1280px] px-4 py-6 pb-24 sm:px-6 md:pb-10 lg:px-8">
-        {activeTab === 'escala' && (
-          <OverviewDeskTab
+      <main className="mx-auto max-w-[1200px] px-4 py-6 pb-24 sm:px-6 md:py-8 md:pb-12 lg:px-8">
+        {activeTab === 'inicio' && (
+          <InicioTab
             state={state}
-            members={INITIAL_MEMBERS}
             activeUser={activeUser}
-            activeRole={activeRole}
             onUpdateAttendance={handleUpdateAttendance}
             onToggleServingOnDesk={handleToggleServingOnDesk}
-            onChangeAssignmentMember={handleChangeAssignmentMember}
-            onChangeProgrammingTeam={handleChangeProgrammingTeam}
             onNavigateTab={setActiveTab}
-          />
-        )}
-
-        {activeTab === 'aovivo' && (
-          <LiveControlTab
-            state={state}
-            members={INITIAL_MEMBERS}
-            activeRole={activeRole}
-            onUpdateLiveItem={handleUpdateLiveItem}
-            onToggleServiceLive={handleToggleServiceLive}
-            onUpdateLiveNotes={handleUpdateLiveNotes}
           />
         )}
 
         {activeTab === 'musicas' && (
           <MusicTab
             songs={state.songs}
-            activeRole={activeRole}
+            canEditMusic={canEditMusic}
+            canApprove={isLeader}
             activeUserName={activeUser.name}
             isFrozen={state.isFrozen}
             onAddSong={handleAddSong}
@@ -495,7 +458,8 @@ export function App() {
         {activeTab === 'programacao' && (
           <ProgrammingTab
             state={state}
-            activeRole={activeRole}
+            canEditProgramming={canEditProgramming}
+            canApprove={isLeader}
             activeUserName={activeUser.name}
             onChangeTeam={handleChangeProgrammingTeam}
             onAddRunItem={handleAddRunItem}
@@ -506,10 +470,23 @@ export function App() {
           />
         )}
 
-        {activeTab === 'devocional' && (
+        {activeTab === 'culto' && (
+          <CultoTab
+            state={state}
+            members={INITIAL_MEMBERS}
+            canOperateDesk={canOperateDesk}
+            uploadedFilesMap={uploadedFilesRef.current}
+            onUpdateLiveItem={handleUpdateLiveItem}
+            onToggleServiceLive={handleToggleServiceLive}
+            onUpdateLiveNotes={handleUpdateLiveNotes}
+            onPackageGenerated={(zipName) => handlePackageGenerated(zipName)}
+          />
+        )}
+
+        {activeTab === 'meditacao' && (
           <DevotionalTab
             activeUser={activeUser}
-            activeRole={activeRole}
+            isLeader={isLeader}
             members={INITIAL_MEMBERS}
             saturdayDate={state.serviceDate}
             mdoEntries={state.mdoEntries}
@@ -519,27 +496,31 @@ export function App() {
           />
         )}
 
-        {activeTab === 'holyrics' && (
-          <HolyricsExportTab
+        {activeTab === 'escalas' && (
+          <EscalasTab
             state={state}
-            uploadedFilesMap={uploadedFilesRef.current}
-            onPackageGenerated={handlePackageGenerated}
+            members={INITIAL_MEMBERS}
+            activeUser={activeUser}
+            isLeader={isLeader}
+            onUpdateAttendance={handleUpdateAttendance}
+            onToggleServingOnDesk={handleToggleServingOnDesk}
+            onChangeAssignmentMember={handleChangeAssignmentMember}
           />
         )}
 
-        {activeTab === 'governanca' && (
-          <GovernanceTab
+        {activeTab === 'configuracoes' && (
+          <ConfiguracoesTab
             state={state}
-            activeRole={activeRole}
+            isLeader={isLeader}
+            onChangeTeam={handleChangeProgrammingTeam}
             onUpdateScreen={handleUpdateScreen}
             onToggleFreeze={handleToggleFreeze}
+            onToggleApproveSong={handleToggleApproveSong}
+            onToggleApproveMedia={handleToggleApproveMedia}
+            onResetDemo={handleResetDemo}
           />
         )}
       </main>
-
-      <footer className="hidden border-t border-zinc-200 py-5 text-center text-xs text-zinc-500 md:block dark:border-white/10 dark:text-zinc-400">
-        Projeção Nova Jovens 2 · Padrão Holyrics · Telão Central 3840×2160 (16:9) · Laterais 3200×1800 (16:9)
-      </footer>
 
       <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>

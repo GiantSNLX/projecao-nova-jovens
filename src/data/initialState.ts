@@ -8,25 +8,22 @@ import type {
 
 export const TEAM_LABELS: Record<
   ProgrammingTeam,
-  { code: string; name: string; phonetic: string; badgeClass: string }
+  { code: string; name: string; subtitle: string }
 > = {
   ALPHA: {
     code: 'A',
-    name: 'Equipe Alpha',
-    phonetic: 'Alfa (OTAN)',
-    badgeClass: 'bg-[#0095FF]/15 text-[#38BDF8] border-[#0095FF]/40',
+    name: 'Alpha',
+    subtitle: 'Programação A (Alpha)',
   },
   BRAVO: {
     code: 'B',
-    name: 'Equipe Bravo',
-    phonetic: 'Bravo (OTAN)',
-    badgeClass: 'bg-[#F5C41E]/15 text-[#F5C41E] border-[#F5C41E]/40',
+    name: 'Bravo',
+    subtitle: 'Programação B (Bravo)',
   },
   CHARLIE: {
     code: 'C',
-    name: 'Equipe Charlie',
-    phonetic: 'Charlie (OTAN)',
-    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+    name: 'Charlie',
+    subtitle: 'Programação C (Charlie)',
   },
 };
 
@@ -37,121 +34,104 @@ export const DESK_POSITION_INFO: Record<
   CAPITAO: {
     label: 'Capitão',
     short: 'Capitão',
-    responsibility: 'Coordena a mesa, aprova o pacote, lidera o roteiro ao vivo e valida presenças.',
+    responsibility: 'Coordena a mesa, aprova o culto e acompanha a equipe.',
   },
   PRINCIPAL: {
     label: 'Principal',
     short: 'Principal',
-    responsibility: 'Opera o Holyrics principal: letras, versículos, vídeos e avisos nos telões.',
+    responsibility: 'Opera o Holyrics principal com letras, vídeos e avisos.',
   },
   RETORNO: {
     label: 'Retorno',
     short: 'Retorno',
-    responsibility: 'Controla o retorno de palco (letras, cronômetro e recados para louvor/pregação).',
+    responsibility: 'Cuida do retorno de palco para louvor e pregação.',
   },
   CORTE: {
     label: 'Corte',
     short: 'Corte',
-    responsibility: 'Gerencia a mesa de corte/câmeras e transições entre projeção e transmissão.',
+    responsibility: 'Faz os cortes de câmera e transições com a projeção.',
   },
   APOIO: {
     label: 'Apoio',
     short: 'Apoio',
-    responsibility: 'Suporte operacional, conferência de mídias, passagens rápidas e backup da mesa.',
+    responsibility: 'Dá suporte rápido para conferência de mídias e trocas na mesa.',
   },
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: 'Admin / Coordenação',
-  CAPTAIN: 'Capitão de Mesa',
-  MEMBER: 'Operador / Membro',
-  MUSIC: 'Ministério de Música',
-  PROGRAMMING: 'Programação (A/B/C)',
+  ADMIN: 'Coordenação',
+  CAPTAIN: 'Capitão',
+  MEMBER: 'Projeção',
+  MUSIC: 'Música',
+  PROGRAMMING: 'Programação',
 };
 
 export interface HolyricsSpecRule {
-  category: 'VIDEO' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'LYRICS' | 'AUTOMATION';
+  category: 'VIDEO' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'LYRICS';
   title: string;
   acceptedExtensions: string[];
   recommended: string;
   resolutionRule: string;
-  maxRecommendedMb: number;
   notes: string;
 }
 
 export const HOLYRICS_SPECS: HolyricsSpecRule[] = [
   {
     category: 'VIDEO',
-    title: 'Vídeos e Fundos Animados',
+    title: 'Vídeos',
     acceptedExtensions: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'],
-    recommended: '.mp4 (Codec H.264 + Áudio AAC)',
-    resolutionRule: '1920×1080 (Full HD) ou 3840×2160 (4K) / 3200×1800 em 16:9, 30/60 fps',
-    maxRecommendedMb: 450,
-    notes:
-      'O Holyrics usa o motor do VLC integrado. Evite 4K com bitrate extremo se o computador da mesa não tiver GPU dedicada.',
+    recommended: '.mp4 (H.264 + AAC)',
+    resolutionRule: '1920×1080 ou 3840×2160 (Central) / 3200×1800 (Laterais) em 16:9',
+    notes: 'Reprodução pelo motor VLC do Holyrics. Evite arquivos 4K pesados demais sem necessidade.',
   },
   {
     category: 'IMAGE',
-    title: 'Imagens, Banners e Avisos',
+    title: 'Imagens e Avisos',
     acceptedExtensions: ['.png', '.jpg', '.jpeg', '.bmp', '.gif'],
-    recommended: '.png (transparência) ou .jpg (alta qualidade)',
-    resolutionRule: 'Central 3840×2160 px | Laterais 3200×1800 px (16:9 exato)',
-    maxRecommendedMb: 25,
-    notes:
-      'Imagens verticais (9:16) ou quadradas geram faixas pretas ou corte; valide antes no Simulador de 3 Telas.',
+    recommended: '.png (com transparência) ou .jpg',
+    resolutionRule: 'Central 3840×2160 px · Laterais 3200×1800 px (16:9)',
+    notes: 'Imagens verticais de celular ficam com barras pretas ou cortes nos telões.',
   },
   {
     category: 'AUDIO',
-    title: 'Áudios, Trilhas e Playbacks',
+    title: 'Áudios e Trilhas',
     acceptedExtensions: ['.mp3', '.wav', '.aac', '.ogg', '.flac'],
     recommended: '.mp3 (320 kbps) ou .wav',
-    resolutionRule: 'Estéreo 44.1 kHz / 48 kHz com volume normalizado',
-    maxRecommendedMb: 60,
-    notes:
-      'Suportados pelo player interno do Holyrics, inclusive com disparo sincronizado por slide.',
+    resolutionRule: 'Áudio estéreo com volume equilibrado',
+    notes: 'Compatível com o player interno do Holyrics.',
   },
   {
     category: 'DOCUMENT',
-    title: 'Documentos e Apresentações',
+    title: 'Apresentações e Slides',
     acceptedExtensions: ['.pdf', '.ppt', '.pptx'],
-    recommended: '.pdf ou slides exportados em .png/.jpg (16:9)',
-    resolutionRule: 'Proporção 16:9 (Widescreen)',
-    maxRecommendedMb: 80,
-    notes:
-      'Arquivos .ppt/.pptx funcionam apenas no Windows com Microsoft PowerPoint instalado na mesa. Prefira PDF ou PNG para evitar quebra de fontes.',
+    recommended: '.pdf ou imagens .png/.jpg 16:9',
+    resolutionRule: 'Tela widescreen 16:9',
+    notes: 'PowerPoint (.ppt/.pptx) exige PowerPoint instalado no Windows da mesa. PDF ou PNG evitam fontes desconfiguradas.',
   },
   {
     category: 'LYRICS',
     title: 'Letras de Músicas',
     acceptedExtensions: ['.txt'],
-    recommended: '.txt estruturado em blocos de 2 a 4 linhas (Widescreen)',
-    resolutionRule: 'Estrofes separadas por linha em branco e tags [Verso], [Coro], [Ponte]',
-    maxRecommendedMb: 2,
-    notes:
-      'O portal formata e gera automaticamente o .txt de cada música pronto para importar no acervo do Holyrics.',
-  },
-  {
-    category: 'AUTOMATION',
-    title: 'Roteiro e API Server',
-    acceptedExtensions: ['.json', '.js'],
-    recommended: 'culto_holyrics.json + script_holyrics_import.js',
-    resolutionRule: 'Compatível com Holyrics API Server e Holyrics Script',
-    maxRecommendedMb: 5,
-    notes:
-      'O pacote .zip gerado já entrega o roteiro estruturado e o script para automação de playlist.',
+    recommended: '.txt separado em blocos de 2 a 4 linhas',
+    resolutionRule: 'Estrofes com linha em branco e marcadores [Verso], [Coro], [Ponte]',
+    notes: 'O portal gera os arquivos .txt já formatados para importar direto no Holyrics.',
   },
 ];
 
 export const INITIAL_MEMBERS: MemberUser[] = [
   {
     id: 'usr-1',
+    senibId: '1042',
+    pin: '1234',
     name: 'Lucas Mendes',
-    ministry: 'Projeção',
+    ministry: 'Liderança / Projeção',
     roles: ['ADMIN', 'CAPTAIN', 'MEMBER'],
     active: true,
   },
   {
     id: 'usr-2',
+    senibId: '1058',
+    pin: '1234',
     name: 'Mariana Souza',
     ministry: 'Projeção',
     roles: ['CAPTAIN', 'MEMBER'],
@@ -159,6 +139,8 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-3',
+    senibId: '1085',
+    pin: '1234',
     name: 'Rafael Oliveira',
     ministry: 'Projeção',
     roles: ['MEMBER'],
@@ -166,6 +148,8 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-4',
+    senibId: '1091',
+    pin: '1234',
     name: 'Camila Ferreira',
     ministry: 'Projeção',
     roles: ['MEMBER'],
@@ -173,6 +157,8 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-5',
+    senibId: '1103',
+    pin: '1234',
     name: 'Gabriel Costa',
     ministry: 'Projeção',
     roles: ['MEMBER'],
@@ -180,13 +166,17 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-6',
+    senibId: '1120',
+    pin: '1234',
     name: 'Beatriz Almeida',
-    ministry: 'Ministério de Música',
+    ministry: 'Música',
     roles: ['MUSIC', 'MEMBER'],
     active: true,
   },
   {
     id: 'usr-7',
+    senibId: '1194',
+    pin: '1234',
     name: 'Matheus Rocha',
     ministry: 'Programação Alpha',
     roles: ['PROGRAMMING', 'MEMBER'],
@@ -195,6 +185,8 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-8',
+    senibId: '1208',
+    pin: '1234',
     name: 'Juliana Lima',
     ministry: 'Programação Bravo',
     roles: ['PROGRAMMING', 'MEMBER'],
@@ -203,6 +195,8 @@ export const INITIAL_MEMBERS: MemberUser[] = [
   },
   {
     id: 'usr-9',
+    senibId: '1231',
+    pin: '1234',
     name: 'Thiago Santos',
     ministry: 'Programação Charlie',
     roles: ['PROGRAMMING', 'MEMBER'],
@@ -220,7 +214,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
   status: 'VALIDATING',
   cutoffLabel: 'Sexta-feira, 20:00',
   isFrozen: false,
-  liveNotes: 'Checar áudio do vídeo de abertura às 19:05 antes da entrada da igreja.',
+  liveNotes: 'Conferir áudio do vídeo de abertura às 19:05 antes da entrada da igreja.',
   screens: [
     {
       code: 'LEFT',
@@ -231,7 +225,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
     },
     {
       code: 'CENTER',
-      label: 'Telão Central (Principal)',
+      label: 'Telão Central',
       widthPx: 3840,
       heightPx: 2160,
       aspectRatio: '16:9',
@@ -294,7 +288,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '19:20',
       durationMinutes: 10,
       title: 'Pré-culto e Contagem Regressiva',
-      description: 'Loop visual nas três telas com trilha ambiente até 19:30.',
+      description: 'Vídeo em loop nas três telas com trilha ambiente.',
       itemType: 'OPENING',
       responsibleName: 'Mesa de Projeção',
       requiresMedia: true,
@@ -308,13 +302,13 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '19:30',
       durationMinutes: 5,
       title: 'Vídeo de Abertura — Nova Jovens 2',
-      description: 'Execução sincronizada no Telão Central e Laterais com áudio em linha.',
+      description: 'Soltar vídeo nas três telas com áudio em linha.',
       itemType: 'PROGRAMMING',
       responsibleName: 'Equipe Alpha',
       requiresMedia: true,
       liveStatus: 'CURRENT',
       liveStartedAt: '19:31',
-      captainNotes: 'Atenção ao corte imediato para câmera 1 ao final do vídeo.',
+      captainNotes: 'Corte para câmera 1 assim que terminar o vídeo.',
     },
     {
       id: 'run-3',
@@ -322,7 +316,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '19:35',
       durationMinutes: 25,
       title: 'Bloco de Louvor',
-      description: 'Três músicas em sequência no Holyrics com retorno ativo para o palco.',
+      description: 'Três músicas em sequência com retorno ativo para o palco.',
       itemType: 'WORSHIP',
       responsibleName: 'Ministério de Música',
       requiresMedia: false,
@@ -334,7 +328,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '20:00',
       durationMinutes: 12,
       title: 'Dinâmica e Avisos da Semana',
-      description: 'Slides da Equipe Alpha + QR de inscrição no acampamento.',
+      description: 'Slides da Equipe Alpha e QR do acampamento.',
       itemType: 'ANNOUNCEMENTS',
       responsibleName: 'Equipe Alpha',
       requiresMedia: true,
@@ -346,9 +340,9 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '20:12',
       durationMinutes: 38,
       title: 'Palavra e Versículos Projetados',
-      description: 'Texto bíblico no Telão Central e tópicos nas laterais.',
+      description: 'Textos bíblicos no telão central e pontos nas laterais.',
       itemType: 'WORD',
-      responsibleName: 'Preletor + Principal/Retorno',
+      responsibleName: 'Preletor e Mesa',
       requiresMedia: true,
       liveStatus: 'PENDING',
     },
@@ -358,7 +352,7 @@ export const INITIAL_SERVICE_STATE: ServiceState = {
       plannedTime: '20:50',
       durationMinutes: 10,
       title: 'Oração Final e Encerramento',
-      description: 'Tela institucional Nova Jovens 2 durante a saída.',
+      description: 'Tela fixa do Nova Jovens 2 na saída.',
       itemType: 'CLOSING',
       responsibleName: 'Mesa de Projeção',
       requiresMedia: false,
@@ -401,7 +395,7 @@ Teu sorriso é vida em mim
 Eu seguro em Tuas mãos
 Confio em Ti, confio em Ti`,
       approved: true,
-      notes: 'Entrar com fundo azul escuro e letra branca sem sombra pesada.',
+      notes: 'Fundo escuro com letra branca limpa.',
       addedBy: 'Beatriz Almeida',
     },
     {
@@ -473,7 +467,7 @@ Em todo tempo Tu és tão, tão bom
 Com todo fôlego que tenho
 Eu cantarei da bondade de Deus`,
       approved: false,
-      notes: 'Confirmar se vai repetir a ponte duas vezes no final.',
+      notes: 'Confirmar repetição da ponte no ensaio.',
       addedBy: 'Beatriz Almeida',
     },
   ],
@@ -493,7 +487,7 @@ Eu cantarei da bondade de Deus`,
       aspectRatio: '16:9',
       durationSeconds: 600,
       validationStatus: 'VALID',
-      validationMessages: ['Proporção 16:9 exata para Telão Central (3840×2160) e Laterais (3200×1800).'],
+      validationMessages: ['Proporção 16:9 pronta para o Telão Central (3840×2160) e Laterais (3200×1800).'],
       uploadedBy: 'Matheus Rocha',
       createdAt: '18:20',
       approved: true,
@@ -515,8 +509,8 @@ Eu cantarei da bondade de Deus`,
       durationSeconds: 95,
       validationStatus: 'WARNING',
       validationMessages: [
-        'Proporção 16:9 validada para Holyrics (.mp4).',
-        'Resolução 1920×1080 será escalonada no Telão Central (3840×2160) — aceito, mas 4K traz mais nitidez.',
+        'Proporção 16:9 aceita no Holyrics (.mp4).',
+        'Arquivo em Full HD (1920×1080); funciona bem, mas o Telão Central suporta até 3840×2160.',
       ],
       uploadedBy: 'Matheus Rocha',
       createdAt: '18:35',
@@ -537,7 +531,7 @@ Eu cantarei da bondade de Deus`,
       heightPx: 2160,
       aspectRatio: '16:9',
       validationStatus: 'VALID',
-      validationMessages: ['Resolução nativa 3840×2160 (4K UHD) compatível com o Telão Central.'],
+      validationMessages: ['Resolução exata do Telão Central (3840×2160).'],
       uploadedBy: 'Matheus Rocha',
       createdAt: '18:40',
       approved: false,
@@ -552,7 +546,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Segunda',
       completed: true,
       bibleReference: 'Salmos 27:1-4',
-      reflectionNote: 'Foco em permanecer firme mesmo nos dias corridos.',
+      reflectionNote: 'Permanecer firme no Senhor durante a semana.',
       updatedAt: 'Seg 07:30',
     },
     {
@@ -562,7 +556,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Terça',
       completed: true,
       bibleReference: 'Romanos 12:1-2',
-      reflectionNote: 'Renovar a mente antes de servir no ministério.',
+      reflectionNote: 'Renovar a mente antes de servir.',
       updatedAt: 'Ter 07:15',
     },
     {
@@ -572,7 +566,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Quarta',
       completed: true,
       bibleReference: 'Filipenses 4:6-8',
-      reflectionNote: 'Entregar a ansiedade em oração.',
+      reflectionNote: 'Entregar as preocupações em oração.',
       updatedAt: 'Qua 08:05',
     },
     {
@@ -582,7 +576,7 @@ Eu cantarei da bondade de Deus`,
       dayLabel: 'Quinta',
       completed: true,
       bibleReference: 'Colossenses 3:23',
-      reflectionNote: 'Fazer tudo para o Senhor, inclusive na mesa de projeção.',
+      reflectionNote: 'Servir com excelência na mesa de projeção.',
       updatedAt: 'Qui 21:10',
     },
     {
@@ -629,24 +623,24 @@ Eu cantarei da bondade de Deus`,
       timestamp: '18:48',
       actorName: 'Lucas Mendes',
       actorRole: 'CAPTAIN',
-      action: 'DESK_CHECKIN',
-      detail: 'Check-in na mesa confirmado na posição Capitão.',
+      action: 'Mesa',
+      detail: 'Lucas Mendes entrou na posição Capitão.',
     },
     {
       id: 'aud-2',
       timestamp: '18:52',
       actorName: 'Rafael Oliveira',
       actorRole: 'MEMBER',
-      action: 'DESK_CHECKIN',
-      detail: 'Check-in na mesa confirmado na posição Principal.',
+      action: 'Mesa',
+      detail: 'Rafael Oliveira entrou na posição Principal.',
     },
     {
       id: 'aud-3',
       timestamp: '18:40',
       actorName: 'Matheus Rocha',
       actorRole: 'PROGRAMMING',
-      action: 'MEDIA_UPLOADED',
-      detail: 'Enviou aviso_acampamento_2026.png (3840×2160) para o bloco 04.',
+      action: 'Mídia',
+      detail: 'Enviou aviso_acampamento_2026.png (3840×2160) no bloco 04.',
     },
   ],
 };

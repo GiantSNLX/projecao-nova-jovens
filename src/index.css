@@ -1,18 +1,15 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @layer base {
   :root {
-    --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
-    --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, monospace;
-    --accent-blue: #0095FF;
-    --accent-yellow: #F5C41E;
+    --font-sans: 'Host Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
   html {
     font-family: var(--font-sans);
-    scroll-behavior: smooth;
+    background-color: #0B0C0F;
+    color: #F4F5F7;
     overflow-x: clip;
   }
 
@@ -22,7 +19,7 @@
     line-height: 1.5;
   }
 
-  /* Prevent iOS auto-zoom on form controls */
+  /* Evita zoom automatico no celular ao tocar em campos */
   input,
   select,
   textarea {
@@ -35,7 +32,6 @@
   }
 }
 
-/* Custom hairline scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -46,7 +42,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 9999px;
 }
 

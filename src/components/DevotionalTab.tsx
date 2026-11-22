@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { BookOpen, CheckCircle2, Lock, MessageCircleHeart, ShieldCheck } from 'lucide-react';
-import type { MdoEntry, MemberUser, Role, SaturdayVerseRecord } from '../types/portal';
+import { CheckCircle2, Lock } from 'lucide-react';
+import type { MdoEntry, MemberUser, SaturdayVerseRecord } from '../types/portal';
 
 interface DevotionalTabProps {
   activeUser: MemberUser;
-  activeRole: Role;
+  isLeader: boolean;
   members: MemberUser[];
   saturdayDate: string;
   mdoEntries: MdoEntry[];
@@ -24,7 +24,7 @@ const WEEK_DAYS: { key: MdoEntry['dayKey']; label: string }[] = [
 
 export function DevotionalTab({
   activeUser,
-  activeRole,
+  isLeader,
   members,
   saturdayDate,
   mdoEntries,
@@ -32,7 +32,6 @@ export function DevotionalTab({
   onSaveMdo,
   onSaveSaturdayVerse,
 }: DevotionalTabProps) {
-  const isLeadership = activeRole === 'ADMIN' || activeRole === 'CAPTAIN';
   const [selectedDay, setSelectedDay] = useState<MdoEntry['dayKey']>('SEX');
 
   const userMdoList = WEEK_DAYS.map((d) => {
@@ -95,7 +94,7 @@ export function DevotionalTab({
   const handleConfirmVerse = (e: React.FormEvent) => {
     e.preventDefault();
     if (!spokenToId) {
-      setVerseError('Selecione para quem você falou seus versículos.');
+      setVerseError('Escolha para quem você falou seus versículos.');
       return;
     }
     setVerseError(null);
@@ -109,28 +108,29 @@ export function DevotionalTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <div className="border-b border-white/10 pb-5">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">
+          Controle de Meditação
+        </h1>
+        <p className="mt-1 text-sm text-zinc-400">
+          Registre seu MDO durante a semana e confirme seus versículos no sábado.
+        </p>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* MDO na Semana */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 lg:col-span-7 dark:border-white/10 dark:bg-[#12151C]">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-[#0095FF]" />
-              <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">
-                Meu MDO da Semana ({completedDaysCount}/6 dias)
-              </h2>
-            </div>
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+        {/* MDO na semana */}
+        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-7">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-white">
+              MDO da semana ({completedDaysCount}/6 dias)
+            </h2>
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
               <Lock className="h-3.5 w-3.5" />
-              <span>Anotações privadas (LGPD)</span>
+              <span>Anotações pessoais</span>
             </span>
           </div>
 
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Alimente seu MDO de segunda a sábado antes de servir no altar e na mesa.
-          </p>
-
-          {/* Day Selector Grid */}
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {userMdoList.map((day) => {
               const isSelected = selectedDay === day.dayKey;
@@ -139,16 +139,16 @@ export function DevotionalTab({
                   key={day.dayKey}
                   type="button"
                   onClick={() => selectDay(day.dayKey)}
-                  className={`flex min-h-[56px] flex-col items-center justify-center rounded-xl border p-2 text-xs font-semibold transition-colors ${
+                  className={`flex min-h-[54px] flex-col items-center justify-center rounded-lg border p-2 text-xs font-medium ${
                     isSelected
-                      ? 'border-[#0095FF] bg-[#0095FF]/15 text-[#0095FF]'
+                      ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
                       : day.completed
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                        : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-white/10 dark:bg-[#171B24] dark:text-zinc-400'
+                        ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300'
+                        : 'border-white/10 bg-[#0B0C0F] text-zinc-400'
                   }`}
                 >
                   <span>{day.dayKey}</span>
-                  <span className="mt-0.5 text-[11px] font-normal">
+                  <span className="mt-0.5 text-[11px] opacity-80">
                     {day.completed ? 'Feito' : 'Pendente'}
                   </span>
                 </button>
@@ -158,7 +158,7 @@ export function DevotionalTab({
 
           <form onSubmit={handleSaveMdoSubmit} className="mt-5 space-y-3">
             <div>
-              <label htmlFor="mdo-ref" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="mdo-ref" className="block text-sm font-medium text-zinc-300">
                 Passagem lida ({activeDayEntry.dayLabel})
               </label>
               <input
@@ -168,27 +168,27 @@ export function DevotionalTab({
                 value={refDraft}
                 onChange={(e) => setRefDraft(e.target.value)}
                 placeholder="Ex.: João 15:1-12"
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="mdo-note" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                O que Deus falou comigo hoje
+              <label htmlFor="mdo-note" className="block text-sm font-medium text-zinc-300">
+                Anotação do dia
               </label>
               <textarea
                 id="mdo-note"
                 rows={4}
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
-                placeholder="Escreva seu resumo ou aplicação prática..."
-                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                placeholder="Escreva o que falou com você..."
+                className="mt-1 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
               />
             </div>
 
             <button
               type="submit"
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0080DC]"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]"
             >
               <CheckCircle2 className="h-4 w-4" />
               <span>Salvar MDO de {activeDayEntry.dayLabel}</span>
@@ -197,34 +197,26 @@ export function DevotionalTab({
         </section>
 
         {/* Versículos de Sábado */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 lg:col-span-5 dark:border-white/10 dark:bg-[#12151C]">
-          <div className="flex items-center gap-2">
-            <MessageCircleHeart className="h-5 w-5 text-[#F5C41E]" />
-            <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">
-              Versículos de Sábado
-            </h2>
-          </div>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Marque se você já falou seus versículos neste sábado ({saturdayDate}) e selecione para quem falou.
+        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 lg:col-span-5">
+          <h2 className="text-base font-semibold text-white">Versículos de sábado</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Informe se você já falou seus versículos neste sábado ({saturdayDate}) e selecione para quem falou.
           </p>
 
           {myVerseRecord.spoken && (
-            <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 text-sm text-emerald-300">
-              <div className="font-semibold">Versículos registrados às {myVerseRecord.spokenAt}!</div>
-              <div className="mt-0.5 text-xs">
-                Falado para:{' '}
-                <strong>
-                  {members.find((m) => m.id === myVerseRecord.spokenToUserId)?.name ?? 'Líder'}
-                </strong>{' '}
-                · {myVerseRecord.verseReference}
-              </div>
+            <div className="mt-4 rounded-lg border border-emerald-500/35 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+              Registrado às {myVerseRecord.spokenAt} para{' '}
+              <strong>
+                {members.find((m) => m.id === myVerseRecord.spokenToUserId)?.name ?? 'Líder'}
+              </strong>
+              .
             </div>
           )}
 
           <form onSubmit={handleConfirmVerse} className="mt-4 space-y-3">
             <div>
-              <label htmlFor="verse-ref" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Versículo(s) decorado(s)
+              <label htmlFor="verse-ref" className="block text-sm font-medium text-zinc-300">
+                Referência do versículo
               </label>
               <input
                 id="verse-ref"
@@ -232,52 +224,46 @@ export function DevotionalTab({
                 value={verseRef}
                 onChange={(e) => setVerseRef(e.target.value)}
                 placeholder="Ex.: Colossenses 3:23-24"
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="verse-listener" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Para quem você falou os versículos?
+              <label htmlFor="verse-listener" className="block text-sm font-medium text-zinc-300">
+                Para quem você falou?
               </label>
               <select
                 id="verse-listener"
                 value={spokenToId}
                 onChange={(e) => setSpokenToId(e.target.value)}
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-base text-zinc-900 dark:border-white/15 dark:bg-[#181C25] dark:text-white"
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
               >
-                <option value="">Selecione um membro/líder...</option>
+                <option value="">Selecione alguém da equipe...</option>
                 {members
                   .filter((m) => m.id !== activeUser.id)
                   .map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.ministry})
+                      {m.name}
                     </option>
                   ))}
               </select>
             </div>
 
-            {verseError && (
-              <p className="text-sm font-medium text-red-400">{verseError}</p>
-            )}
+            {verseError && <p className="text-sm text-red-400">{verseError}</p>}
 
             <button
               type="submit"
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               <CheckCircle2 className="h-4 w-4" />
               <span>Já falei meus versículos</span>
             </button>
           </form>
 
-          {/* Leadership Summary (only indicators, no private MDO text) */}
-          {isLeadership && (
-            <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-white/10">
-              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <ShieldCheck className="h-4 w-4 text-[#0095FF]" />
-                <span>Resumo da Liderança — Sábado (LGPD)</span>
-              </div>
-              <div className="mt-3 space-y-2">
+          {isLeader && (
+            <div className="mt-6 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-semibold text-white">Acompanhamento da equipe</h3>
+              <div className="mt-2.5 divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
                 {members.slice(0, 6).map((m) => {
                   const v = saturdayVerses.find(
                     (rec) => rec.userId === m.id && rec.saturdayDate === saturdayDate,
@@ -290,22 +276,18 @@ export function DevotionalTab({
                   return (
                     <div
                       key={m.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-xs dark:border-white/10 dark:bg-[#171B24]"
+                      className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs"
                     >
                       <div>
-                        <span className="font-semibold text-zinc-900 dark:text-white">{m.name}</span>
-                        <span className="ml-2 text-zinc-500 dark:text-zinc-400">
-                          MDO: {mdoDays}/6
-                        </span>
+                        <span className="font-medium text-white">{m.name}</span>
+                        <span className="ml-2 text-zinc-500">MDO {mdoDays}/6</span>
                       </div>
                       {v?.spoken ? (
-                        <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-400">
+                        <span className="text-emerald-400">
                           Falou p/ {listener?.name.split(' ')[0] ?? 'Líder'}
                         </span>
                       ) : (
-                        <span className="rounded bg-zinc-500/15 px-2 py-0.5 text-zinc-400">
-                          Pendente
-                        </span>
+                        <span className="text-zinc-500">Pendente</span>
                       )}
                     </div>
                   );

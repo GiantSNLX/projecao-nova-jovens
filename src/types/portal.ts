@@ -87,6 +87,20 @@ export interface DeskAssignment {
   deskCheckinAt?: string;
 }
 
+/**
+ * Conteúdo próprio de cada culto (roteiro, letras, mídias e aviso da mesa).
+ * O culto ativo espelha esse conteúdo nos campos de topo de ServiceState;
+ * ao trocar de culto, o conteúdo atual é guardado no culto anterior.
+ */
+export interface ServiceContent {
+  startsAtTime: string;
+  programmingTeam: ProgrammingTeam;
+  liveNotes: string;
+  runItems: RunItem[];
+  songs: ServiceSong[];
+  mediaAssets: MediaAsset[];
+}
+
 export interface SaturdaySchedule {
   id: string;
   date: string;
@@ -95,6 +109,7 @@ export interface SaturdaySchedule {
   roomName?: string;
   isPast?: boolean;
   assignments: DeskAssignment[];
+  content?: ServiceContent;
 }
 
 export interface RunItem {

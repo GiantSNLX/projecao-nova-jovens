@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  DESK_POSITION_INFO,
   INITIAL_MEMBERS,
   INITIAL_SERVICE_STATE,
 } from './data/initialState';
@@ -17,6 +18,7 @@ import type {
   SaturdaySchedule,
   ScheduleLocationType,
   ScreenCode,
+  ServiceContent,
   ServiceSong,
   ServiceState,
   TabId,
@@ -79,6 +81,39 @@ const AUDITORIO_POSITIONS: DeskPosition[] = [
 
 const ROOM_POSITIONS: DeskPosition[] = ['PRINCIPAL', 'RETORNO'];
 
+const stripObjectUrls = (assets: MediaAsset[]): MediaAsset[] =>
+  assets.map(({ objectUrl: _omit, ...rest }) => rest);
+
+/** Conteúdo do culto ativo, para guardar no próprio culto antes de trocar. */
+function snapshotContent(s: ServiceState): ServiceContent {
+  return {
+    startsAtTime: s.startsAtTime,
+    programmingTeam: s.programmingTeam,
+    liveNotes: s.liveNotes,
+    runItems: s.runItems,
+    songs: s.songs,
+    mediaAssets: s.mediaAssets,
+  };
+}
+
+/** Culto sem material próprio começa vazio: nada herdado de outro culto. */
+function emptyContent(s: ServiceState): ServiceContent {
+  return {
+    startsAtTime: s.startsAtTime,
+    programmingTeam: s.programmingTeam,
+    liveNotes: '',
+    runItems: [],
+    songs: [],
+    mediaAssets: [],
+  };
+}
+
+const ATTENDANCE_LOG: Record<AttendanceStatus, string> = {
+  CONFIRMED: 'confirmou presença',
+  DECLINED: 'informou ausência',
+  PENDING: 'desfez a resposta de presença',
+};
+
 function buildAssignmentsForPositions(
   positions: DeskPosition[],
   existing: DeskAssignment[],
@@ -119,7 +154,12 @@ export function App() {
     try {
       const serializable: ServiceState = {
         ...state,
-        mediaAssets: state.mediaAssets.map(({ objectUrl: _omit, ...rest }) => rest),
+        mediaAssets: stripObjectUrls(state.mediaAssets),
+        schedules: state.schedules.map((s) =>
+          s.content
+            ? { ...s, content: { ...s.content, mediaAssets: stripObjectUrls(s.content.mediaAssets) } }
+            : s,
+        ),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
     } catch {
@@ -210,13 +250,18 @@ export function App() {
     setState((prev) => {
       const targetSched = prev.schedules.find((s) => s.id === scheduleId);
       const target = targetSched?.assignments.find((a) => a.id === assignmentId);
+      if (!target || target.attendanceStatus === status) return prev;
+      const confirmed = status === 'CONFIRMED';
       const updated = updateScheduleAssignments(prev, scheduleId, (list) =>
         list.map((a) =>
           a.id === assignmentId
             ? {
                 ...a,
                 attendanceStatus: status,
-                confirmedAt: status === 'CONFIRMED' ? nowTime() : undefined,
+                confirmedAt: confirmed ? a.confirmedAt ?? nowTime() : undefined,
+                // Sem presença confirmada, ninguém permanece operando a mesa.
+                servingOnDesk: confirmed ? a.servingOnDesk : false,
+                deskCheckinAt: confirmed ? a.deskCheckinAt : undefined,
               }
             : a,
         ),
@@ -227,7 +272,7 @@ export function App() {
         auditLogs: [
           makeAudit(
             'Presença',
-            `confirmou ${status === 'CONFIRMED' ? 'presença' : 'ausência'} em ${target?.position ?? ''} (${targetSched?.date ?? ''}).`,
+            `${ATTENDANCE_LOG[status]} como ${DESK_POSITION_INFO[target.position].label} (${targetSched?.date ?? ''}).`,
           ),
           ...prev.auditLogs,
         ],
@@ -246,6 +291,7 @@ export function App() {
             ? {
                 ...a,
                 attendanceStatus: nextServing ? 'CONFIRMED' : a.attendanceStatus,
+                confirmedAt: nextServing ? a.confirmedAt ?? nowTime() : a.confirmedAt,
                 servingOnDesk: nextServing,
                 deskCheckinAt: nextServing ? nowTime() : undefined,
               }
@@ -258,7 +304,7 @@ export function App() {
         auditLogs: [
           makeAudit(
             'Mesa',
-            `${nextServing ? 'entrou na' : 'saiu da'} posição ${target?.position ?? ''}.`,
+            `${nextServing ? 'entrou na mesa' : 'saiu da mesa'}${target ? ` como ${DESK_POSITION_INFO[target.position].label}` : ''}.`,
           ),
           ...prev.auditLogs,
         ],
@@ -430,10 +476,17 @@ export function App() {
 
   const handleSelectSchedule = (scheduleId: string) => {
     setState((prev) => {
+      if (scheduleId === prev.activeScheduleId) return prev;
       const found = prev.schedules.find((s) => s.id === scheduleId);
       if (!found) return prev;
+      // Guarda roteiro, letras e mídias no culto que está saindo e carrega os do culto escolhido.
+      const schedules = prev.schedules.map((s) =>
+        s.id === prev.activeScheduleId ? { ...s, content: snapshotContent(prev) } : s,
+      );
       return {
         ...prev,
+        ...(found.content ?? emptyContent(prev)),
+        schedules,
         activeScheduleId: found.id,
         serviceDate: found.date,
         title: found.title,
@@ -494,6 +547,9 @@ export function App() {
   const handleAddMember = (payload: NewUserPayload): { ok: boolean; error?: string } => {
     if (!payload.name || !payload.senibId || !payload.pin) {
       return { ok: false, error: 'Preencha nome, matrícula SENIB e PIN.' };
+    }
+    if (!/^\d{4}$/.test(payload.pin)) {
+      return { ok: false, error: 'O PIN deve ter 4 dígitos numéricos, como no login.' };
     }
     const duplicate = state.members.some((m) => m.senibId === payload.senibId);
     if (duplicate) {

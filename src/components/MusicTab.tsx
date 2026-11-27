@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CheckCircle2,
+  Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   Download,
   FileUp,
   Loader2,
+  Lock,
   MessageSquarePlus,
+  MessageSquareText,
   Plus,
   Trash2,
+  Undo2,
 } from 'lucide-react';
 import type { ServiceSong } from '../types/portal';
 import { formatHolyricsVersions, sanitizeSlug } from '../utils/holyrics';
@@ -25,6 +28,46 @@ interface MusicTabProps {
   onToggleApproveSong: (songId: string) => void;
   onRemoveSong: (songId: string) => void;
 }
+
+type FeedbackTone = 'ok' | 'info' | 'error';
+type Feedback = { tone: FeedbackTone; text: string };
+
+type StatusTone = 'ok' | 'attn' | 'muted';
+
+const STATUS_TONE: Record<StatusTone, string> = {
+  ok: 'text-ok',
+  attn: 'text-attn',
+  muted: 'text-ink-3',
+};
+
+const FEEDBACK_TONE: Record<FeedbackTone, string> = {
+  ok: 'border-ok/40 bg-ok/10',
+  info: 'border-accent/35 bg-accent/10',
+  error: 'border-danger/40 bg-danger/10',
+};
+
+function getSongStatus(song: ServiceSong): { label: string; tone: StatusTone } {
+  if (song.adjustmentRequest) return { label: 'Ajuste solicitado', tone: 'attn' };
+  if (song.approved) return { label: 'Aprovada', tone: 'ok' };
+  if (!song.rawLyrics.trim()) return { label: 'Aguardando letra', tone: 'muted' };
+  return { label: 'Aguardando aprovação', tone: 'attn' };
+}
+
+function StatusLabel({ song }: { song: ServiceSong }) {
+  const { label, tone } = getSongStatus(song);
+  return (
+    <span className={`inline-flex items-center gap-1.5 font-medium ${STATUS_TONE[tone]}`}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+      {label}
+    </span>
+  );
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/* Alvo de toque de 44px no celular, mais compacto a partir do tablet */
+const BTN_SECONDARY =
+  'btn-rb-surface inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-sm font-medium text-ink-2 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-9';
 
 export function MusicTab({
   songs,
@@ -58,8 +101,14 @@ export function MusicTab({
   const [slideNoteDraft, setSlideNoteDraft] = useState('');
 
   const [extractingDoc, setExtractingDoc] = useState(false);
-  const [docFeedback, setDocFeedback] = useState<string | null>(null);
+  const [docFeedback, setDocFeedback] = useState<Feedback | null>(null);
   const [copiedVersion, setCopiedVersion] = useState<string | null>(null);
+
+  const detailRef = useRef<HTMLElement>(null);
+
+  const canEdit = canEditMusic && !isFrozen;
+  const isNew = creatingNew || !selectedSong;
+  const approvedCount = songs.filter((s) => s.approved).length;
 
   useEffect(() => {
     if (creatingNew || !selectedSong) return;
@@ -70,6 +119,19 @@ export function MusicTab({
     setCurrentSlideIdx(0);
   }, [creatingNew, selectedSong]);
 
+  /* No celular a lista fica acima do editor: leva o usuário até a música escolhida */
+  const revealDetail = () => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 1023px)').matches) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() =>
+      detailRef.current?.scrollIntoView({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        block: 'start',
+      }),
+    );
+  };
+
   const selectSong = (song: ServiceSong) => {
     setCreatingNew(false);
     setDocFeedback(null);
@@ -79,6 +141,7 @@ export function MusicTab({
     setRawLyrics(song.rawLyrics);
     setNotes(song.notes ?? '');
     setSlideNotes(song.slideNotes ?? {});
+    revealDetail();
   };
 
   const startNewSong = () => {
@@ -89,6 +152,12 @@ export function MusicTab({
     setRawLyrics('');
     setNotes('');
     setSlideNotes({});
+    revealDetail();
+  };
+
+  const cancelNewSong = () => {
+    setCreatingNew(false);
+    setDocFeedback(null);
   };
 
   const liveVersions = useMemo(
@@ -110,7 +179,7 @@ export function MusicTab({
     try {
       const extracted = await extractLyricsFromDocument(file);
       if (extracted.length === 0) {
-        setDocFeedback('Nenhum texto encontrado nesse arquivo.');
+        setDocFeedback({ tone: 'error', text: 'Nenhum texto encontrado neste arquivo.' });
         return;
       }
 
@@ -120,9 +189,11 @@ export function MusicTab({
           setTitle(item.title);
         }
         setRawLyrics(item.rawLyrics);
-        setDocFeedback(
-          `Letra extraída de "${file.name}". Confira os slides abaixo e clique em "Salvar e enviar para o Culto".`,
-        );
+        const saveLabel = creatingNew || !selectedSong ? 'Adicionar música' : 'Salvar letra';
+        setDocFeedback({
+          tone: 'info',
+          text: `Letra importada de "${file.name}". Confira os slides e clique em ${saveLabel}.`,
+        });
       } else {
         extracted.forEach((item, idx) => {
           const existingMatch = sortedSongs[idx];
@@ -153,14 +224,19 @@ export function MusicTab({
           }
         });
         setRawLyrics(extracted[0].rawLyrics);
-        setDocFeedback(
-          `${extracted.length} músicas extraídas de "${file.name}" e enviadas para o Culto (1 linha e 2 linhas).`,
-        );
+        setDocFeedback({
+          tone: 'ok',
+          text: `${extracted.length} músicas importadas de "${file.name}" e enviadas para o Culto, nas versões de 1 e 2 linhas.`,
+        });
       }
     } catch (err) {
-      setDocFeedback(
-        err instanceof Error ? err.message : 'Erro ao ler o PDF/PPTX.',
-      );
+      setDocFeedback({
+        tone: 'error',
+        text:
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível ler o arquivo. Use PDF, PPTX ou TXT.',
+      });
     } finally {
       setExtractingDoc(false);
     }
@@ -206,13 +282,14 @@ export function MusicTab({
       });
     }
 
-    setDocFeedback(
-      'Letra e observações salvas e enviadas para o Culto (Principal 2 linhas + Retorno/Studio 1 linha).',
-    );
+    setDocFeedback({
+      tone: 'ok',
+      text: 'Letra salva e enviada para o Culto: Principal em 2 linhas, Retorno/Studio em 1 linha.',
+    });
   };
 
   const openSlideNoteEditor = (slideKey: string) => {
-    if (!canEditMusic || isFrozen) return;
+    if (!canEdit) return;
     setActiveSlideKey(slideKey);
     setSlideNoteDraft(slideNotes[slideKey] ?? '');
   };
@@ -269,409 +346,521 @@ export function MusicTab({
     }
   };
 
+  const changePreviewMode = (mode: 'two' | 'one') => {
+    setPreviewMode(mode);
+    setCurrentSlideIdx(0);
+    setActiveSlideKey(null);
+  };
+
+  const safeIdx = Math.max(0, Math.min(currentSlideIdx, previewSlides.length - 1));
+  const activeSlideText = previewSlides[safeIdx];
+  const activeKey = `${previewMode}-${safeIdx}`;
+  const activeNote = slideNotes[activeKey];
+
+  const inputClass =
+    'mt-1 w-full rounded-lg border border-line bg-sunken px-3 text-base text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none read-only:cursor-default read-only:focus:border-line sm:text-sm';
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-5">
+      <header className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Músicas</h1>
+          <p className="mt-1 text-xs text-ink-3">
+            {plural(songs.length, 'música', 'músicas')} no Culto ·{' '}
+            {plural(approvedCount, 'aprovada', 'aprovadas')}
+          </p>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-          {canEditMusic && !isFrozen && (
-            <>
-              <label className="btn-rb-primary inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white sm:px-4 sm:text-sm">
-                {extractingDoc ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                ) : (
-                  <FileUp className="h-4 w-4 shrink-0" />
-                )}
-                <span className="truncate">{extractingDoc ? 'Lendo...' : 'Anexar arquivo'}</span>
-                <input
-                  type="file"
-                  accept=".pdf,.pptx,.txt"
-                  disabled={extractingDoc}
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleImportPdfOrPptx(f);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
+        {canEdit && (
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <button
+              type="button"
+              onClick={startNewSong}
+              className={`${BTN_SECONDARY} text-ink`}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="truncate">Nova música</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={startNewSong}
-                className="btn-rb-surface inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-white sm:px-3.5 sm:text-sm"
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                <span className="truncate">Nova música</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+            <label
+              title="PDF, PPTX ou TXT"
+              className={`btn-rb-primary inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent sm:min-h-9 sm:px-4 ${
+                extractingDoc ? 'cursor-wait opacity-70' : 'cursor-pointer'
+              }`}
+            >
+              {extractingDoc ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <FileUp className="h-4 w-4 shrink-0" />
+              )}
+              <span className="truncate">{extractingDoc ? 'Lendo arquivo...' : 'Importar letra'}</span>
+              <input
+                type="file"
+                accept=".pdf,.pptx,.txt"
+                disabled={extractingDoc}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleImportPdfOrPptx(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+        )}
+      </header>
 
-      {docFeedback && (
-        <div className="rounded-lg border border-[#0095FF]/35 bg-[#0095FF]/10 px-4 py-3 text-sm text-zinc-100">
-          {docFeedback}
-        </div>
+      {canEditMusic && isFrozen && (
+        <p className="flex items-start gap-2 rounded-lg border border-line bg-sunken px-3 py-2 text-xs text-ink-2">
+          <Lock className="mt-px h-4 w-4 shrink-0 text-ink-3" />
+          <span>Envios travados pela liderança. Letras e notas ficam disponíveis só para consulta.</span>
+        </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-12">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
         {/* Lista das músicas */}
-        <section className="min-w-0 lg:col-span-5">
-          <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
-            {sortedSongs.map((song) => {
-              const hasLyrics = song.rawLyrics.trim().length > 0;
-              const isSelected = !creatingNew && selectedSong?.id === song.id;
-              const slideNoteCount = song.slideNotes ? Object.keys(song.slideNotes).length : 0;
+        <section aria-label="Músicas do Culto" className="min-w-0 lg:self-start">
+          {sortedSongs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center">
+              <p className="text-sm font-medium text-ink">Nenhuma música no Culto</p>
+              <p className="mt-1 text-xs text-ink-3">
+                {canEdit
+                  ? 'Importe a letra em PDF, PPTX ou TXT, ou use Nova música.'
+                  : 'As letras aparecem aqui quando a equipe de Música enviar.'}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface">
+              {sortedSongs.map((song) => {
+                const isSelected = !creatingNew && selectedSong?.id === song.id;
+                const slideNoteCount = song.slideNotes ? Object.keys(song.slideNotes).length : 0;
+                const meta = [
+                  song.validatedBySchedule ? 'Validada no roteiro' : null,
+                  slideNoteCount > 0
+                    ? plural(slideNoteCount, 'nota em slide', 'notas em slides')
+                    : null,
+                ].filter(Boolean);
 
-              return (
-                <div
-                  key={song.id}
-                  onClick={() => selectSong(song)}
-                  className={`flex cursor-pointer items-center justify-between gap-3 p-4 transition-colors ${
-                    isSelected ? 'bg-[#0095FF]/12' : 'hover:bg-white/[0.03]'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono-tech text-xs font-semibold text-[#38BDF8]">
+                return (
+                  <li key={song.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectSong(song)}
+                      aria-current={isSelected ? 'true' : undefined}
+                      className={`flex min-h-11 w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
+                        isSelected
+                          ? 'bg-accent/10 shadow-[inset_3px_0_0_var(--c-accent)]'
+                          : 'hover:bg-ink/5'
+                      }`}
+                    >
+                      <span className="font-mono-tech w-8 shrink-0 pt-px text-xs font-semibold text-ink-3">
                         {song.songCode ?? `M${song.orderIndex}`}
                       </span>
-                      <span className="truncate text-base font-medium text-white">
-                        {song.title}
-                      </span>
-                      {song.validatedBySchedule && (
-                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                          Validada no roteiro
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-ink">
+                          {song.title}
                         </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-zinc-400">
-                      {hasLyrics ? 'Letra pronta para o Culto' : 'Aguardando letra'}
-                      {slideNoteCount > 0 ? ` · ${slideNoteCount} nota(s) em slide` : ''}
-                    </p>
-                    {song.notes && (
-                      <p className="mt-1 truncate text-xs text-zinc-300">Obs.: {song.notes}</p>
-                    )}
-                    {song.adjustmentRequest && (
-                      <p className="mt-1 text-xs font-medium text-[#F5C41E]">
-                        Ajuste pedido: {song.adjustmentRequest.reason}
-                      </p>
-                    )}
-                  </div>
-
-                  <div
-                    className="flex shrink-0 items-center gap-1.5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {isLeader && (
-                      <button
-                        type="button"
-                        onClick={() => onToggleApproveSong(song.id)}
-                        className={`min-h-[38px] rounded-lg px-2.5 text-xs font-semibold ${
-                          song.approved
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-[#F5C41E]/15 text-[#F5C41E]'
-                        }`}
-                      >
-                        {song.approved ? 'OK' : 'Aprovar'}
-                      </button>
-                    )}
-
-                    {canEditMusic && !isFrozen && (
-                      <button
-                        type="button"
-                        aria-label={`Remover ${song.title}`}
-                        onClick={() => onRemoveSong(song.id)}
-                        className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-3">
+                          <StatusLabel song={song} />
+                          {meta.map((m) => (
+                            <span key={m}>{m}</span>
+                          ))}
+                        </span>
+                        {song.notes && (
+                          <span className="mt-1 block truncate text-xs text-ink-3">
+                            Obs.: {song.notes}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
 
-        {/* Visualização dos slides + Dados da música */}
-        <section className="min-w-0 space-y-5 rounded-xl border border-white/10 bg-[#12141A] p-4 sm:p-5 lg:col-span-7">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="section-title">
-              {creatingNew
-                ? 'Nova música'
-                : `${selectedSong?.songCode ?? ''} · ${title || selectedSong?.title || 'Música'}`}
-            </h2>
+        {/* Letra, observações e slides da música selecionada */}
+        <section
+          ref={detailRef}
+          aria-label="Letra e slides"
+          className="min-w-0 scroll-mt-20 space-y-4 rounded-xl border border-line bg-surface p-4 sm:p-5"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-baseline gap-2">
+                {!isNew && (
+                  <span className="font-mono-tech shrink-0 text-xs font-semibold text-ink-3">
+                    {selectedSong.songCode ?? `M${selectedSong.orderIndex}`}
+                  </span>
+                )}
+                <h2 className="section-title truncate">
+                  {isNew ? 'Nova música' : title || selectedSong.title || 'Música'}
+                </h2>
+              </div>
+              {!isNew && (
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-3">
+                  <StatusLabel song={selectedSong} />
+                  {selectedSong.validatedBySchedule && <span>Validada no roteiro</span>}
+                  {previewSlides.length > 0 && (
+                    <span>{plural(previewSlides.length, 'slide', 'slides')}</span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {!isNew && (isLeader || canEdit) && (
+              <div className="flex flex-wrap gap-2 sm:shrink-0">
+                {isLeader && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleApproveSong(selectedSong.id)}
+                    className={`${BTN_SECONDARY} flex-1 text-ink sm:flex-none`}
+                  >
+                    {selectedSong.approved ? (
+                      <Undo2 className="h-4 w-4 shrink-0 text-ink-3" />
+                    ) : (
+                      <Check className="h-4 w-4 shrink-0 text-ok" />
+                    )}
+                    <span>{selectedSong.approved ? 'Desfazer aprovação' : 'Aprovar letra'}</span>
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveSong(selectedSong.id)}
+                    className={`${BTN_SECONDARY} flex-1 hover:border-danger/40 hover:text-danger sm:flex-none`}
+                  >
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    <span>Remover música</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Visualização principal de como vai ficar no telão */}
-          {previewSlides.length > 0 && (
-            <div className="space-y-3 rounded-xl border border-white/10 bg-[#08090C] p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="grid w-full grid-cols-2 rounded-lg border border-white/12 bg-[#12141A] p-1 sm:inline-flex sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewMode('two');
-                      setCurrentSlideIdx(0);
-                      setActiveSlideKey(null);
-                    }}
-                    className={`min-h-[38px] rounded-md px-2.5 text-xs font-semibold ${
-                      previewMode === 'two'
-                        ? 'bg-[#0095FF] text-white'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Principal (2 linhas)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewMode('one');
-                      setCurrentSlideIdx(0);
-                      setActiveSlideKey(null);
-                    }}
-                    className={`min-h-[38px] rounded-md px-2.5 text-xs font-semibold ${
-                      previewMode === 'one'
-                        ? 'bg-[#0095FF] text-white'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Retorno / Studio (1)
-                  </button>
-                </div>
-
-                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => void copyVersion(previewMode)}
-                    className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    <span>{copiedVersion === previewMode ? 'Copiado' : 'Copiar'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadVersionTxt(previewMode)}
-                    className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    <span>Baixar .TXT</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Telão simulando o slide ativo */}
-              {(() => {
-                const safeIdx = Math.min(currentSlideIdx, previewSlides.length - 1);
-                const activeSlideText = previewSlides[safeIdx];
-                const activeKey = `${previewMode}-${safeIdx}`;
-                const activeNote = slideNotes[activeKey];
-                return (
-                  <div className="space-y-2.5">
-                    <div className="relative flex aspect-video max-h-[210px] w-full flex-col items-center justify-center rounded-lg border border-[#0095FF]/35 bg-black px-6 text-center">
-                      <span className="font-mono-tech absolute top-2.5 left-3 text-[11px] text-zinc-500">
-                        Slide {safeIdx + 1}/{previewSlides.length}
-                      </span>
-                      <p className="text-lg font-semibold whitespace-pre-line text-white sm:text-2xl">
-                        {activeSlideText}
-                      </p>
-                      {activeNote && (
-                        <span className="mt-2 rounded bg-[#F5C41E]/15 px-2.5 py-0.5 text-xs text-[#F5C41E]">
-                          Nota: {activeNote}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        disabled={safeIdx === 0}
-                        onClick={() => setCurrentSlideIdx((i) => Math.max(0, i - 1))}
-                        className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-zinc-200 disabled:opacity-40"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Anterior</span>
-                      </button>
-
-                      {canEditMusic && !isFrozen ? (
-                        <button
-                          type="button"
-                          onClick={() => openSlideNoteEditor(activeKey)}
-                          className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-[#38BDF8] hover:bg-white/5"
-                        >
-                          <MessageSquarePlus className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{activeNote ? 'Editar nota' : 'Nota'}</span>
-                        </button>
-                      ) : (
-                        <div />
-                      )}
-
-                      <button
-                        type="button"
-                        disabled={safeIdx >= previewSlides.length - 1}
-                        onClick={() =>
-                          setCurrentSlideIdx((i) => Math.min(previewSlides.length - 1, i + 1))
-                        }
-                        className="btn-rb-surface inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/12 px-2 text-xs font-medium text-zinc-200 disabled:opacity-40"
-                      >
-                        <span className="truncate">Próximo</span>
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+          {!isNew && selectedSong.adjustmentRequest && (
+            <p className="rounded-lg border border-attn/40 bg-attn/10 px-3 py-2 text-xs text-ink-2">
+              <span className="font-medium text-attn">
+                Ajuste solicitado por {selectedSong.adjustmentRequest.requestedBy}:
+              </span>{' '}
+              {selectedSong.adjustmentRequest.reason}
+            </p>
           )}
 
           <form onSubmit={handleSave} className="space-y-3">
-            <div>
-              <label htmlFor="m-title" className="block text-sm font-medium text-zinc-300">
-                Nome da música
-              </label>
-              <input
-                id="m-title"
-                type="text"
-                required
-                disabled={!canEditMusic || isFrozen}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex.: Medley Morada"
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 disabled:opacity-60"
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="m-title" className="block text-xs font-medium text-ink-3">
+                  Título
+                </label>
+                <input
+                  id="m-title"
+                  type="text"
+                  required
+                  readOnly={!canEdit}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ex.: Medley Morada"
+                  className={`${inputClass} min-h-11 sm:min-h-9`}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="m-notes" className="block text-xs font-medium text-ink-3">
+                  Observação <span className="text-ink-4">(opcional)</span>
+                </label>
+                <input
+                  id="m-notes"
+                  type="text"
+                  readOnly={!canEdit}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ex.: Repetir o coro 2x no final"
+                  className={`${inputClass} min-h-11 sm:min-h-9`}
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="m-lyrics" className="block text-sm font-medium text-zinc-300">
+              <label htmlFor="m-lyrics" className="block text-xs font-medium text-ink-3">
                 Letra
               </label>
               <textarea
                 id="m-lyrics"
-                rows={4}
+                rows={6}
                 required
-                disabled={!canEditMusic || isFrozen}
+                readOnly={!canEdit}
                 value={rawLyrics}
                 onChange={(e) => setRawLyrics(e.target.value)}
-                placeholder="Anexe o arquivo acima ou cole a letra aqui..."
-                className="mt-1 w-full rounded-lg border border-white/12 bg-[#0B0C0F] p-3 text-base text-white placeholder:text-zinc-600 disabled:opacity-60"
+                placeholder={
+                  canEdit
+                    ? 'Cole a letra aqui ou use Importar letra. Separe as estrofes com uma linha em branco.'
+                    : 'Letra ainda não enviada pela equipe de Música.'
+                }
+                className={`${inputClass} resize-y py-2 leading-relaxed`}
               />
             </div>
 
-            <div>
-              <label htmlFor="m-notes" className="block text-sm font-medium text-zinc-300">
-                Observação (opcional)
-              </label>
-              <input
-                id="m-notes"
-                type="text"
-                disabled={!canEditMusic || isFrozen}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex.: Repetir o coro 2x no final"
-                className="mt-1 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 disabled:opacity-60"
-              />
-            </div>
+            {canEdit && (
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                {creatingNew && selectedSong && (
+                  <button type="button" onClick={cancelNewSong} className={BTN_SECONDARY}>
+                    Cancelar
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="btn-rb-primary inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold sm:min-h-9"
+                >
+                  {isNew ? 'Adicionar música' : 'Salvar letra'}
+                </button>
+              </div>
+            )}
 
-            {canEditMusic && !isFrozen && (
-              <button
-                type="submit"
-                className="btn-rb-primary inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white"
+            {docFeedback && (
+              <p
+                role="status"
+                className={`rounded-lg border px-3 py-2 text-xs text-ink-2 ${FEEDBACK_TONE[docFeedback.tone]}`}
               >
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Salvar</span>
-              </button>
+                {docFeedback.text}
+              </p>
             )}
           </form>
 
-          {/* Todos os slides (clique para selecionar e adicionar nota) */}
-          {previewSlides.length > 0 && (
-            <div className="border-t border-white/10 pt-4 space-y-2.5">
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                {previewSlides.map((slideText, idx) => {
-                  const slideKey = `${previewMode}-${idx}`;
-                  const existingNote = slideNotes[slideKey];
-                  const isEditingThis = activeSlideKey === slideKey;
-                  const isActiveSlide = idx === Math.min(currentSlideIdx, previewSlides.length - 1);
+          {/* Pré-visualização dos slides como saem no Holyrics */}
+          <div className="space-y-3 border-t border-line-soft pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink">Slides</h3>
+              {previewSlides.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copyVersion(previewMode)}
+                    className={BTN_SECONDARY}
+                  >
+                    {copiedVersion === previewMode ? (
+                      <Check className="h-4 w-4 shrink-0 text-ok" />
+                    ) : (
+                      <Copy className="h-4 w-4 shrink-0" />
+                    )}
+                    <span>{copiedVersion === previewMode ? 'Copiado' : 'Copiar texto'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadVersionTxt(previewMode)}
+                    className={BTN_SECONDARY}
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    <span>Baixar .txt</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
-                  return (
-                    <div
-                      key={slideKey}
-                      onClick={() => setCurrentSlideIdx(idx)}
-                      className={`cursor-pointer rounded-lg border p-3 transition ${
-                        isActiveSlide
-                          ? 'border-[#0095FF]/60 bg-[#0095FF]/8'
-                          : existingNote
-                            ? 'border-[#F5C41E]/45 bg-[#08090C]'
-                            : 'border-white/10 bg-[#08090C] hover:border-white/25'
-                      }`}
+            {previewSlides.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3">
+                {canEdit
+                  ? 'Os slides aparecem aqui assim que houver letra.'
+                  : 'Sem slides: a letra ainda não foi enviada.'}
+              </p>
+            ) : (
+              <>
+                <div
+                  role="group"
+                  aria-label="Versão dos slides"
+                  className="grid w-full grid-cols-2 gap-1 rounded-lg border border-line bg-sunken p-1 sm:inline-grid sm:w-auto"
+                >
+                  {(
+                    [
+                      ['two', 'Principal · 2 linhas'],
+                      ['one', 'Retorno/Studio · 1 linha'],
+                    ] as const
+                  ).map(([mode, label]) => {
+                    const active = previewMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => changePreviewMode(mode)}
+                        className={`min-h-10 rounded-md px-3 text-xs font-medium leading-tight transition-colors sm:min-h-8 ${
+                          active
+                            ? 'bg-surface text-ink ring-1 ring-line'
+                            : 'text-ink-3 hover:text-ink'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Telão: simula a projeção, por isso fica sempre escuro */}
+                <div className="mx-auto w-full max-w-[28rem] space-y-2">
+                  <div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-black px-6 text-center">
+                    <span className="font-mono-tech absolute top-2 left-3 text-[11px] text-white/50">
+                      {safeIdx + 1}/{previewSlides.length}
+                    </span>
+                    <p className="text-lg leading-snug font-semibold whitespace-pre-line text-white sm:text-xl">
+                      {activeSlideText}
+                    </p>
+                  </div>
+
+                  {activeNote && (
+                    <p className="text-xs text-ink-2">
+                      <span className="font-medium text-attn">Nota do slide {safeIdx + 1}:</span>{' '}
+                      {activeNote}
+                    </p>
+                  )}
+
+                  <div className={`grid gap-2 ${canEdit ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    <button
+                      type="button"
+                      disabled={safeIdx === 0}
+                      onClick={() => setCurrentSlideIdx((i) => Math.max(0, i - 1))}
+                      className={`${BTN_SECONDARY} px-2`}
                     >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="font-mono-tech text-[11px] text-zinc-400">
-                          Slide {idx + 1}
-                        </span>
-                        {canEditMusic && !isFrozen && (
+                      <ChevronLeft className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Anterior</span>
+                    </button>
+
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => openSlideNoteEditor(activeKey)}
+                        className={`${BTN_SECONDARY} px-2`}
+                      >
+                        {activeNote ? (
+                          <MessageSquareText className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <MessageSquarePlus className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="truncate">{activeNote ? 'Editar nota' : 'Adicionar nota'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={safeIdx >= previewSlides.length - 1}
+                      onClick={() =>
+                        setCurrentSlideIdx((i) => Math.min(previewSlides.length - 1, i + 1))
+                      }
+                      className={`${BTN_SECONDARY} px-2`}
+                    >
+                      <span className="truncate">Próximo</span>
+                      <ChevronRight className="h-4 w-4 shrink-0" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Todos os slides: toque para mostrar no telão, ícone para anotar */}
+                <ol className="grid gap-2 sm:grid-cols-2">
+                  {previewSlides.map((slideText, idx) => {
+                    const slideKey = `${previewMode}-${idx}`;
+                    const existingNote = slideNotes[slideKey];
+                    const isEditingThis = activeSlideKey === slideKey;
+                    const isActiveSlide = idx === safeIdx;
+
+                    return (
+                      <li
+                        key={slideKey}
+                        className={`overflow-hidden rounded-lg border ${
+                          isActiveSlide
+                            ? 'border-accent ring-1 ring-accent'
+                            : existingNote
+                              ? 'border-attn/50'
+                              : 'border-line'
+                        }`}
+                      >
+                        <div className="flex">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openSlideNoteEditor(slideKey);
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-[#38BDF8] hover:underline"
+                            onClick={() => setCurrentSlideIdx(idx)}
+                            aria-current={isActiveSlide ? 'true' : undefined}
+                            title="Mostrar no telão"
+                            className="relative flex min-h-16 flex-1 items-center justify-center bg-black px-6 py-2 text-center"
                           >
-                            <MessageSquarePlus className="h-3 w-3" />
-                            <span>{existingNote ? 'Editar nota' : 'Nota'}</span>
+                            <span className="font-mono-tech absolute top-1 left-2 text-[10px] text-white/50">
+                              {idx + 1}
+                            </span>
+                            <span className="text-[13px] leading-snug font-medium whitespace-pre-line text-white">
+                              {slideText}
+                            </span>
                           </button>
-                        )}
-                      </div>
 
-                      <div className="flex min-h-[60px] items-center justify-center rounded border border-white/8 bg-black px-3 py-2 text-center text-sm font-medium whitespace-pre-line text-white">
-                        {slideText}
-                      </div>
-
-                      {existingNote && !isEditingThis && (
-                        <p className="mt-2 rounded bg-[#F5C41E]/10 px-2 py-1 text-xs text-[#F5C41E]">
-                          {existingNote}
-                        </p>
-                      )}
-
-                      {isEditingThis && (
-                        <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            value={slideNoteDraft}
-                            onChange={(e) => setSlideNoteDraft(e.target.value)}
-                            placeholder="Nota para a projeção..."
-                            className="min-h-[38px] w-full rounded border border-white/15 bg-[#12141A] px-2.5 text-xs text-white focus:border-[#0095FF] focus:outline-none"
-                          />
-                          <div className="flex justify-end gap-1.5">
+                          {canEdit && (
                             <button
                               type="button"
-                              onClick={() => setActiveSlideKey(null)}
-                              className="rounded border border-white/12 px-2.5 py-1 text-xs text-zinc-400"
+                              onClick={() => openSlideNoteEditor(slideKey)}
+                              aria-label={`${existingNote ? 'Editar' : 'Adicionar'} nota do slide ${idx + 1}`}
+                              title={existingNote ? 'Editar nota' : 'Adicionar nota'}
+                              className={`inline-flex w-11 shrink-0 items-center justify-center border-l border-line-soft bg-surface hover:bg-ink/5 ${
+                                existingNote ? 'text-attn' : 'text-ink-3 hover:text-ink'
+                              }`}
                             >
-                              Cancelar
+                              {existingNote ? (
+                                <MessageSquareText className="h-4 w-4" />
+                              ) : (
+                                <MessageSquarePlus className="h-4 w-4" />
+                              )}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => saveSlideNote(slideKey)}
-                              className="rounded bg-[#0095FF] px-2.5 py-1 text-xs font-semibold text-white"
-                            >
-                              Salvar
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+
+                        {existingNote && !isEditingThis && (
+                          <p className="border-t border-line-soft bg-surface px-2.5 py-1.5 text-xs text-ink-2">
+                            <span className="font-medium text-attn">Nota:</span> {existingNote}
+                          </p>
+                        )}
+
+                        {isEditingThis && (
+                          <div className="space-y-2 border-t border-line-soft bg-surface p-2">
+                            <label htmlFor={`note-${slideKey}`} className="sr-only">
+                              Nota do slide {idx + 1}
+                            </label>
+                            <input
+                              id={`note-${slideKey}`}
+                              type="text"
+                              autoFocus
+                              value={slideNoteDraft}
+                              onChange={(e) => setSlideNoteDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveSlideNote(slideKey);
+                                } else if (e.key === 'Escape') {
+                                  setActiveSlideKey(null);
+                                }
+                              }}
+                              placeholder="Ex.: Atenção na entrada do coro"
+                              className="min-h-11 w-full rounded-md border border-line bg-sunken px-2.5 text-base text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none sm:min-h-9 sm:text-sm"
+                            />
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setActiveSlideKey(null)}
+                                className={BTN_SECONDARY}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => saveSlideNote(slideKey)}
+                                className="btn-rb-primary inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-semibold sm:min-h-9"
+                              >
+                                Salvar nota
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
+            )}
+          </div>
         </section>
       </div>
     </div>

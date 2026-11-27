@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Lock, ShieldCheck, Trash2, Unlock, UserPlus, Users } from 'lucide-react';
+import { Check, Lock, Trash2, Unlock } from 'lucide-react';
 import type {
   MemberUser,
   ProgrammingTeam,
@@ -7,8 +7,6 @@ import type {
   ScreenCode,
   ServiceState,
 } from '../types/portal';
-import { AnimatedCounter } from './reactbits/AnimatedCounter';
-import { SpotlightCard } from './reactbits/SpotlightCard';
 
 type MinistryChoice = 'PROJECAO' | 'MUSICA' | 'PROGRAMACAO';
 
@@ -40,6 +38,30 @@ function getMemberMinistry(m: MemberUser): MinistryChoice {
   return 'PROJECAO';
 }
 
+const MINISTRY_LABEL: Record<MinistryChoice, string> = {
+  PROJECAO: 'Projeção',
+  MUSICA: 'Música',
+  PROGRAMACAO: 'Programação',
+};
+
+/* Classes compartilhadas */
+const sectionClass = 'rounded-xl border border-line bg-surface';
+const sectionHeadClass = 'border-b border-line-soft px-4 py-3 sm:px-5';
+const labelClass = 'mb-1 block text-xs font-medium text-ink-3';
+const fieldClass =
+  'min-h-11 w-full rounded-lg border border-line bg-sunken px-3 text-base text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none disabled:opacity-60 sm:min-h-10 sm:text-sm';
+const secondaryBtnClass =
+  'btn-rb-surface inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-3 text-sm font-medium text-ink-2 sm:min-h-9';
+const dangerBtnClass =
+  'inline-flex min-h-11 items-center justify-center rounded-lg border border-danger/40 px-3 text-sm font-semibold text-danger transition-colors hover:bg-danger/10 sm:min-h-9';
+
+const roleToggleClass = (on: boolean) =>
+  `inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors sm:min-h-10 sm:w-32 ${
+    on
+      ? 'border-accent/40 bg-accent/10 text-accent'
+      : 'border-line text-ink-3 hover:bg-ink/5 hover:text-ink'
+  }`;
+
 export function ConfiguracoesTab({
   state,
   currentUserId,
@@ -59,8 +81,12 @@ export function ConfiguracoesTab({
   const [programmingTeam, setProgrammingTeam] = useState<ProgrammingTeam>('ALPHA');
   const [newIsLeader, setNewIsLeader] = useState(false);
   const [newIsCaptain, setNewIsCaptain] = useState(false);
-  const [formMsg, setFormMsg] = useState<string | null>(null);
+  const [formMsg, setFormMsg] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(
+    null,
+  );
   const [filterMinistry, setFilterMinistry] = useState<'ALL' | MinistryChoice>('ALL');
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const counts = useMemo(() => {
     const active = state.members.filter((m) => m.active);
@@ -75,6 +101,16 @@ export function ConfiguracoesTab({
     return state.members.filter((m) => getMemberMinistry(m) === filterMinistry);
   }, [state.members, filterMinistry]);
 
+  const filters: { key: 'ALL' | MinistryChoice; label: string; count: number }[] = [
+    { key: 'ALL', label: 'Todos', count: counts.total },
+    { key: 'PROJECAO', label: 'Projeção', count: counts.projecao },
+    { key: 'MUSICA', label: 'Música', count: counts.musica },
+    { key: 'PROGRAMACAO', label: 'Programação', count: counts.programacao },
+  ];
+
+  const aspectRatios = Array.from(new Set(state.screens.map((s) => s.aspectRatio))).join(', ');
+  const recentLogs = state.auditLogs.slice(0, 12);
+
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     setFormMsg(null);
@@ -88,7 +124,7 @@ export function ConfiguracoesTab({
       isCaptain: ministryChoice === 'PROJECAO' && newIsCaptain,
     });
     if (!res.ok) {
-      setFormMsg(res.error || 'Não foi possível cadastrar.');
+      setFormMsg({ tone: 'danger', text: res.error || 'Não foi possível cadastrar o usuário.' });
       return;
     }
     setName('');
@@ -96,7 +132,7 @@ export function ConfiguracoesTab({
     setPin('1234');
     setNewIsLeader(false);
     setNewIsCaptain(false);
-    setFormMsg('Usuário cadastrado com sucesso.');
+    setFormMsg({ tone: 'ok', text: 'Usuário cadastrado.' });
   };
 
   const handleSwitchMinistry = (member: MemberUser, nextMin: MinistryChoice) => {
@@ -145,437 +181,548 @@ export function ConfiguracoesTab({
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-2 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="page-title">Configurações</h1>
-        </div>
-
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${
-            isLeader
-              ? 'border-[#F5C41E]/35 bg-[#F5C41E]/10 text-[#F5C41E]'
-              : 'border-white/12 text-zinc-400'
-          }`}
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          <span>{isLeader ? 'Status: Liderança' : 'Somente leitura'}</span>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <h1 className="page-title">Configurações</h1>
+        <span className="inline-flex w-fit items-center rounded-md border border-line px-2 py-0.5 text-xs font-medium text-ink-3">
+          {isLeader ? 'Acesso de liderança' : 'Somente leitura'}
         </span>
       </div>
 
-      {/* Equipe e permissões */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="section-title flex items-center gap-2">
-              <Users className="h-4 w-4 text-[#0095FF]" />
-              <span>Usuários e Permissões</span>
-            </h2>
-          </div>
-          <span className="text-xs font-medium text-zinc-400">
-            Total ativos: <AnimatedCounter value={counts.total} className="text-white" />
-          </span>
-        </div>
-
-        {/* Contagem por ministério */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SpotlightCard className="rounded-lg border border-white/10 bg-[#0B0C0F]">
-            <button
-              type="button"
-              onClick={() => setFilterMinistry(filterMinistry === 'PROJECAO' ? 'ALL' : 'PROJECAO')}
-              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
-                filterMinistry === 'PROJECAO' ? 'bg-[#0095FF]/12' : ''
-              }`}
-            >
-              <div>
-                <p className="text-xs text-zinc-400">Projeção</p>
-                <p className="text-sm font-medium text-white">Mesa & Liderança</p>
-              </div>
-              <AnimatedCounter
-                value={counts.projecao}
-                className="text-2xl font-semibold text-[#0095FF]"
-              />
-            </button>
-          </SpotlightCard>
-
-          <SpotlightCard
-            spotlightColor="rgba(16, 185, 129, 0.14)"
-            className="rounded-lg border border-white/10 bg-[#0B0C0F]"
-          >
-            <button
-              type="button"
-              onClick={() => setFilterMinistry(filterMinistry === 'MUSICA' ? 'ALL' : 'MUSICA')}
-              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
-                filterMinistry === 'MUSICA' ? 'bg-emerald-500/10' : ''
-              }`}
-            >
-              <div>
-                <p className="text-xs text-zinc-400">Música</p>
-                <p className="text-sm font-medium text-white">Letras & Louvor</p>
-              </div>
-              <AnimatedCounter
-                value={counts.musica}
-                className="text-2xl font-semibold text-emerald-400"
-              />
-            </button>
-          </SpotlightCard>
-
-          <SpotlightCard
-            spotlightColor="rgba(245, 196, 30, 0.14)"
-            className="rounded-lg border border-white/10 bg-[#0B0C0F]"
-          >
-            <button
-              type="button"
-              onClick={() =>
-                setFilterMinistry(filterMinistry === 'PROGRAMACAO' ? 'ALL' : 'PROGRAMACAO')
-              }
-              className={`flex min-h-[56px] w-full items-center justify-between px-4 py-3 text-left transition ${
-                filterMinistry === 'PROGRAMACAO' ? 'bg-[#F5C41E]/10' : ''
-              }`}
-            >
-              <div>
-                <p className="text-xs text-zinc-400">Programação</p>
-                <p className="text-sm font-medium text-white">Alpha, Bravo, Charlie</p>
-              </div>
-              <AnimatedCounter
-                value={counts.programacao}
-                className="text-2xl font-semibold text-[#F5C41E]"
-              />
-            </button>
-          </SpotlightCard>
-        </div>
-
-        {/* Cadastro de novo usuário (Liderança) */}
-        {isLeader && (
-          <form
-            onSubmit={handleCreateUser}
-            className="rounded-xl border border-white/10 bg-[#0B0C0F] p-4 space-y-3"
-          >
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
-              <UserPlus className="h-4 w-4 text-[#0095FF]" />
-              <span>Cadastrar novo usuário</span>
-            </h3>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="block">
-                <span className="mb-1 block text-xs text-zinc-400">Nome completo</span>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex.: Ana Paula"
-                  className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-xs text-zinc-400">Matrícula SENIB</span>
-                <input
-                  type="text"
-                  required
-                  value={senibId}
-                  onChange={(e) => setSenibId(e.target.value)}
-                  placeholder="Ex.: 1301"
-                  className="font-mono-tech min-h-[44px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-xs text-zinc-400">PIN (4 dígitos)</span>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  className="font-mono-tech min-h-[44px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-xs text-zinc-400">Ministério</span>
-                <select
-                  value={ministryChoice}
-                  onChange={(e) => setMinistryChoice(e.target.value as MinistryChoice)}
-                  className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
-                >
-                  <option value="PROJECAO">Projeção</option>
-                  <option value="MUSICA">Música</option>
-                  <option value="PROGRAMACAO">Programação</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 pt-1">
-              {ministryChoice === 'PROGRAMACAO' && (
-                <label className="flex items-center gap-2 text-sm text-zinc-300">
-                  <span>Equipe:</span>
-                  <select
-                    value={programmingTeam}
-                    onChange={(e) => setProgrammingTeam(e.target.value as ProgrammingTeam)}
-                    className="min-h-[44px] rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
-                  >
-                    <option value="ALPHA">Alpha</option>
-                    <option value="BRAVO">Bravo</option>
-                    <option value="CHARLIE">Charlie</option>
-                  </select>
-                </label>
-              )}
-
-              <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-zinc-200">
-                <input
-                  type="checkbox"
-                  checked={newIsLeader}
-                  onChange={(e) => setNewIsLeader(e.target.checked)}
-                  className="h-4 w-4 accent-[#F5C41E]"
-                />
-                <span>Permissão de Liderança</span>
-              </label>
-
-              {ministryChoice === 'PROJECAO' && (
-                <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-zinc-200">
-                  <input
-                    type="checkbox"
-                    checked={newIsCaptain}
-                    onChange={(e) => setNewIsCaptain(e.target.checked)}
-                    className="h-4 w-4 accent-[#0095FF]"
-                  />
-                  <span>Capitão de mesa</span>
-                </label>
-              )}
-
-              <button
-                type="submit"
-                className="ml-auto inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0080DC]"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Cadastrar</span>
-              </button>
-            </div>
-
-            {formMsg && (
-              <p className="text-xs font-medium text-[#0095FF]">{formMsg}</p>
-            )}
-          </form>
-        )}
-
-        {/* Lista de usuários */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-zinc-400">
-              {filterMinistry === 'ALL'
-                ? `Todos os cadastrados (${filteredMembers.length})`
-                : `Filtrado: ${filterMinistry} (${filteredMembers.length})`}
-            </p>
-            {filterMinistry !== 'ALL' && (
-              <button
-                type="button"
-                onClick={() => setFilterMinistry('ALL')}
-                className="text-xs text-[#0095FF] hover:underline"
-              >
-                Mostrar todos
-              </button>
-            )}
-          </div>
-
-          <div className="divide-y divide-white/8 rounded-lg border border-white/10 bg-[#0B0C0F]">
-            {filteredMembers.map((member) => {
-              const currentMin = getMemberMinistry(member);
-              const memberIsLeader = member.roles.includes('ADMIN');
-              const memberIsCaptain = member.roles.includes('CAPTAIN');
-              const isSelf = member.id === currentUserId;
-
-              return (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-white">{member.name}</span>
-                      <span className="font-mono-tech rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-zinc-400">
-                        SENIB {member.senibId}
-                      </span>
-                      {memberIsLeader && (
-                        <span className="rounded border border-[#F5C41E]/35 bg-[#F5C41E]/10 px-2 py-0.5 text-[11px] font-medium text-[#F5C41E]">
-                          Liderança
-                        </span>
-                      )}
-                      {memberIsCaptain && (
-                        <span className="rounded border border-[#0095FF]/35 bg-[#0095FF]/10 px-2 py-0.5 text-[11px] font-medium text-[#0095FF]">
-                          Capitão
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-zinc-500">{member.ministry}</p>
-                  </div>
-
-                  {isLeader && (
-                    <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto sm:items-center sm:gap-2">
-                      <select
-                        aria-label={`Ministério de ${member.name}`}
-                        value={currentMin}
-                        onChange={(e) =>
-                          handleSwitchMinistry(member, e.target.value as MinistryChoice)
-                        }
-                        className="min-h-[40px] rounded-lg border border-white/12 bg-[#12141A] px-2 text-xs text-white focus:border-[#0095FF] focus:outline-none"
-                      >
-                        <option value="PROJECAO">Projeção</option>
-                        <option value="MUSICA">Música</option>
-                        <option value="PROGRAMACAO">Programação</option>
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => handleToggleRoleFlag(member, 'CAPTAIN')}
-                        className={`min-h-[40px] rounded-lg border px-2 text-xs font-medium ${
-                          memberIsCaptain
-                            ? 'border-[#0095FF]/50 bg-[#0095FF]/15 text-[#0095FF]'
-                            : 'border-white/12 text-zinc-400 hover:bg-white/5'
-                        }`}
-                      >
-                        Capitão
-                      </button>
-
-                      <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRoleFlag(member, 'ADMIN')}
-                          className={`min-h-[40px] flex-1 rounded-lg border px-2 text-xs font-medium ${
-                            memberIsLeader
-                              ? 'border-[#F5C41E]/50 bg-[#F5C41E]/15 text-[#F5C41E]'
-                              : 'border-white/12 text-zinc-400 hover:bg-white/5'
-                          }`}
-                        >
-                          Líder
-                        </button>
-
-                        {!isSelf && (
-                          <button
-                            type="button"
-                            onClick={() => onRemoveMember(member.id)}
-                            title="Remover usuário"
-                            aria-label={`Remover ${member.name}`}
-                            className="inline-flex min-h-[40px] w-10 shrink-0 items-center justify-center rounded-lg border border-white/12 text-zinc-400 hover:border-red-500/40 hover:text-red-400"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-          <h2 className="text-base font-semibold text-white">Prazo de envio</h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            {state.isFrozen
-              ? 'Envios travados no momento.'
-              : `Envios abertos. Prazo: ${state.cutoffLabel}.`}
-          </p>
+        {/* Envios da semana */}
+        <section aria-labelledby="cfg-envios" className={sectionClass}>
+          <div className={`flex items-center justify-between gap-3 ${sectionHeadClass}`}>
+            <h2 id="cfg-envios" className="section-title">
+              Envios da semana
+            </h2>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${
+                state.isFrozen
+                  ? 'border-attn/40 bg-attn/10 text-attn'
+                  : 'border-ok/40 bg-ok/10 text-ok'
+              }`}
+            >
+              {state.isFrozen ? 'Travados' : 'Abertos'}
+            </span>
+          </div>
 
-          {isLeader && (
-            <>
-              <input
-                type="text"
-                value={freezeReason}
-                onChange={(e) => setFreezeReason(e.target.value)}
-                placeholder="Motivo (opcional)"
-                className="mt-3 min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
-              />
+          <div className="space-y-3 p-4 sm:p-5">
+            <p className="text-sm text-ink-3">
+              {state.isFrozen ? (
+                'Novos envios estão bloqueados até a reabertura.'
+              ) : (
+                <>
+                  Prazo de envio: <span className="text-ink-2">{state.cutoffLabel}</span>.
+                </>
+              )}
+            </p>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleFreeze(freezeReason.trim() || undefined);
-                  setFreezeReason('');
-                }}
-                className={`mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold ${
-                  state.isFrozen
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'border border-[#F5C41E]/40 bg-[#F5C41E]/15 text-[#F5C41E] hover:bg-[#F5C41E]/25'
-                }`}
-              >
-                {state.isFrozen ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                <span>{state.isFrozen ? 'Reabrir envios' : 'Travar envios'}</span>
-              </button>
-            </>
-          )}
+            {isLeader && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="cfg-motivo" className={labelClass}>
+                    Motivo (opcional)
+                  </label>
+                  <input
+                    id="cfg-motivo"
+                    type="text"
+                    value={freezeReason}
+                    onChange={(e) => setFreezeReason(e.target.value)}
+                    placeholder="Registrado no histórico"
+                    className={fieldClass}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleFreeze(freezeReason.trim() || undefined);
+                    setFreezeReason('');
+                  }}
+                  className="btn-rb-primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white sm:min-h-10"
+                >
+                  {state.isFrozen ? (
+                    <Unlock className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  <span>{state.isFrozen ? 'Reabrir envios' : 'Travar envios da semana'}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-          <h2 className="text-base font-semibold text-white">Resoluções dos 3 telões (16:9)</h2>
-          <div className="mt-4 space-y-3">
+        {/* Resolução dos telões */}
+        <section aria-labelledby="cfg-teloes" className={sectionClass}>
+          <div className={`flex items-baseline justify-between gap-3 ${sectionHeadClass}`}>
+            <h2 id="cfg-teloes" className="section-title">
+              Resolução dos telões
+            </h2>
+            {aspectRatios && (
+              <span className="text-xs text-ink-4">
+                Proporção <span className="font-mono-tech">{aspectRatios}</span>
+              </span>
+            )}
+          </div>
+
+          <div
+            aria-hidden="true"
+            className="hidden px-5 pt-3 text-xs font-medium text-ink-3 sm:grid sm:grid-cols-[minmax(0,1fr)_7rem_7rem] sm:gap-3"
+          >
+            <span>Telão</span>
+            <span className="text-right">Largura (px)</span>
+            <span className="text-right">Altura (px)</span>
+          </div>
+
+          <div className="divide-y divide-line-soft sm:divide-y-0 sm:pb-3">
             {state.screens.map((scr) => (
               <div
                 key={scr.code}
-                className="grid grid-cols-1 gap-2 rounded-lg border border-white/8 bg-[#0B0C0F] p-3 sm:grid-cols-3 sm:items-center"
+                className="grid grid-cols-2 items-end gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_7rem_7rem] sm:items-center sm:gap-3 sm:px-5 sm:py-2"
               >
-                <span className="text-sm font-medium text-white">{scr.label}</span>
-                <input
-                  type="number"
-                  disabled={!isLeader}
-                  aria-label={`Largura ${scr.label}`}
-                  value={scr.widthPx}
-                  onChange={(e) =>
-                    onUpdateScreen(scr.code, Number(e.target.value) || scr.widthPx, scr.heightPx)
-                  }
-                  className="font-mono-tech min-h-[44px] rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white disabled:opacity-60"
-                />
-                <input
-                  type="number"
-                  disabled={!isLeader}
-                  aria-label={`Altura ${scr.label}`}
-                  value={scr.heightPx}
-                  onChange={(e) =>
-                    onUpdateScreen(scr.code, scr.widthPx, Number(e.target.value) || scr.heightPx)
-                  }
-                  className="font-mono-tech min-h-[44px] rounded-lg border border-white/12 bg-[#12141A] px-3 text-base text-white disabled:opacity-60"
-                />
+                <p className="col-span-2 text-sm font-medium text-ink sm:col-span-1">
+                  {scr.label}
+                </p>
+                <label className="block">
+                  <span className={`${labelClass} sm:sr-only`}>Largura (px)</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    disabled={!isLeader}
+                    aria-label={`Largura em pixels, ${scr.label}`}
+                    value={scr.widthPx}
+                    onChange={(e) =>
+                      onUpdateScreen(scr.code, Number(e.target.value) || scr.widthPx, scr.heightPx)
+                    }
+                    className={`${fieldClass} font-mono-tech text-right`}
+                  />
+                </label>
+                <label className="block">
+                  <span className={`${labelClass} sm:sr-only`}>Altura (px)</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    disabled={!isLeader}
+                    aria-label={`Altura em pixels, ${scr.label}`}
+                    value={scr.heightPx}
+                    onChange={(e) =>
+                      onUpdateScreen(scr.code, scr.widthPx, Number(e.target.value) || scr.heightPx)
+                    }
+                    className={`${fieldClass} font-mono-tech text-right`}
+                  />
+                </label>
               </div>
             ))}
           </div>
         </section>
       </div>
 
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-semibold text-white">Histórico recente</h2>
-          {isLeader && (
-            <button
-              type="button"
-              onClick={onResetDemo}
-              className="min-h-[44px] rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300 hover:bg-white/5"
-            >
-              Restaurar dados iniciais
-            </button>
-          )}
+      {/* Usuários e permissões */}
+      <section aria-labelledby="cfg-usuarios" className={sectionClass}>
+        <div
+          className={`flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between ${sectionHeadClass}`}
+        >
+          <h2 id="cfg-usuarios" className="section-title">
+            Usuários e permissões
+          </h2>
+          <p className="text-xs text-ink-3">
+            Ativos <span className="font-mono-tech font-semibold text-ink">{counts.total}</span>
+          </p>
         </div>
 
-        <div className="mt-3 divide-y divide-white/8">
-          {state.auditLogs.slice(0, 12).map((log) => (
-            <div
-              key={log.id}
-              className="flex flex-col gap-1 py-2.5 text-sm sm:flex-row sm:justify-between"
-            >
-              <div>
-                <span className="font-mono-tech mr-2 text-xs text-zinc-500">{log.timestamp}</span>
-                <span className="font-medium text-white">{log.actorName}</span>
-                <span className="ml-1.5 text-zinc-400">{log.detail}</span>
-                {log.reason && <span className="ml-2 text-xs text-[#F5C41E]">({log.reason})</span>}
+        {isLeader && (
+          <form
+            onSubmit={handleCreateUser}
+            aria-labelledby="cfg-novo"
+            className="space-y-3 border-b border-line-soft p-4 sm:p-5"
+          >
+            <h3 id="cfg-novo" className="text-sm font-semibold text-ink">
+              Novo usuário
+            </h3>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12">
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label htmlFor="cfg-nome" className={labelClass}>
+                  Nome completo
+                </label>
+                <input
+                  id="cfg-nome"
+                  type="text"
+                  required
+                  autoComplete="off"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex.: Ana Paula Souza"
+                  className={fieldClass}
+                />
               </div>
-              <span className="text-xs text-zinc-500">{log.action}</span>
+
+              <div className="lg:col-span-2">
+                <label htmlFor="cfg-senib" className={labelClass}>
+                  Matrícula SENIB
+                </label>
+                <input
+                  id="cfg-senib"
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={senibId}
+                  onChange={(e) => setSenibId(e.target.value)}
+                  placeholder="Ex.: 1301"
+                  className={`${fieldClass} font-mono-tech`}
+                />
+              </div>
+
+              <div className="lg:col-span-2">
+                <label htmlFor="cfg-pin" className={labelClass}>
+                  PIN (4 dígitos)
+                </label>
+                <input
+                  id="cfg-pin"
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  pattern="\d{4}"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className={`${fieldClass} font-mono-tech`}
+                />
+              </div>
+
+              <div className="lg:col-span-2">
+                <label htmlFor="cfg-ministerio" className={labelClass}>
+                  Ministério
+                </label>
+                <select
+                  id="cfg-ministerio"
+                  value={ministryChoice}
+                  onChange={(e) => setMinistryChoice(e.target.value as MinistryChoice)}
+                  className={fieldClass}
+                >
+                  <option value="PROJECAO">Projeção</option>
+                  <option value="MUSICA">Música</option>
+                  <option value="PROGRAMACAO">Programação</option>
+                </select>
+              </div>
+
+              {ministryChoice === 'PROGRAMACAO' && (
+                <div className="lg:col-span-2">
+                  <label htmlFor="cfg-equipe" className={labelClass}>
+                    Equipe
+                  </label>
+                  <select
+                    id="cfg-equipe"
+                    value={programmingTeam}
+                    onChange={(e) => setProgrammingTeam(e.target.value as ProgrammingTeam)}
+                    className={fieldClass}
+                  >
+                    <option value="ALPHA">Equipe Alpha</option>
+                    <option value="BRAVO">Equipe Bravo</option>
+                    <option value="CHARLIE">Equipe Charlie</option>
+                  </select>
+                </div>
+              )}
             </div>
-          ))}
+
+            <div className="flex flex-col gap-x-5 gap-y-1 sm:flex-row sm:flex-wrap sm:items-center">
+              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-2 sm:min-h-10">
+                <input
+                  type="checkbox"
+                  checked={newIsLeader}
+                  onChange={(e) => setNewIsLeader(e.target.checked)}
+                  className="h-4 w-4 accent-accent-solid"
+                />
+                <span>Permissão de liderança</span>
+              </label>
+
+              {ministryChoice === 'PROJECAO' && (
+                <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-2 sm:min-h-10">
+                  <input
+                    type="checkbox"
+                    checked={newIsCaptain}
+                    onChange={(e) => setNewIsCaptain(e.target.checked)}
+                    className="h-4 w-4 accent-accent-solid"
+                  />
+                  <span>Capitão de mesa</span>
+                </label>
+              )}
+
+              <div className="mt-2 flex flex-col-reverse gap-2 sm:ml-auto sm:mt-0 sm:flex-row sm:items-center sm:gap-3">
+                {formMsg && (
+                  <p
+                    role="status"
+                    className={`text-xs font-medium ${
+                      formMsg.tone === 'ok' ? 'text-ok' : 'text-danger'
+                    }`}
+                  >
+                    {formMsg.text}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  className="btn-rb-primary inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white sm:min-h-10"
+                >
+                  Cadastrar usuário
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* Filtro por ministério */}
+        <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <h3 className="text-sm font-semibold text-ink">Cadastrados</h3>
+          <div
+            role="group"
+            aria-label="Filtrar por ministério"
+            className="grid grid-cols-2 gap-0.5 rounded-lg border border-line bg-sunken p-0.5 sm:inline-flex"
+          >
+            {filters.map((f) => {
+              const selected = filterMinistry === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setFilterMinistry(f.key)}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors sm:min-h-8 ${
+                    selected ? 'bg-surface text-ink ring-1 ring-line' : 'text-ink-3 hover:text-ink'
+                  }`}
+                >
+                  <span>{f.label}</span>
+                  <span className="font-mono-tech text-xs text-ink-4">{f.count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Lista de usuários */}
+        {filteredMembers.length === 0 ? (
+          <p className="border-t border-line-soft px-4 py-6 text-center text-sm text-ink-3 sm:px-5">
+            {filterMinistry === 'ALL'
+              ? 'Nenhum usuário cadastrado.'
+              : `Nenhum usuário em ${MINISTRY_LABEL[filterMinistry]}.`}
+          </p>
+        ) : (
+          <ul className="divide-y divide-line-soft border-t border-line-soft">
+            {filteredMembers.map((member) => {
+              const currentMin = getMemberMinistry(member);
+              const memberIsLeader = member.roles.includes('ADMIN');
+              const memberIsCaptain = member.roles.includes('CAPTAIN');
+              const isSelf = member.id === currentUserId;
+              const confirming = confirmRemoveId === member.id;
+
+              return (
+                <li key={member.id} className="px-4 py-3 sm:px-5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-sm font-medium text-ink">{member.name}</span>
+                        {isSelf && <span className="text-xs text-ink-4">(você)</span>}
+                        {!isLeader && memberIsLeader && (
+                          <span className="rounded border border-line px-1.5 text-[11px] font-medium text-ink-2">
+                            Liderança
+                          </span>
+                        )}
+                        {!isLeader && memberIsCaptain && (
+                          <span className="rounded border border-line px-1.5 text-[11px] font-medium text-ink-2">
+                            Capitão
+                          </span>
+                        )}
+                        {!member.active && (
+                          <span className="rounded border border-line px-1.5 text-[11px] font-medium text-ink-4">
+                            Inativo
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-ink-4">
+                        <span className="font-mono-tech">SENIB {member.senibId}</span>
+                        <span aria-hidden="true"> · </span>
+                        {member.ministry}
+                      </p>
+                    </div>
+
+                    {isLeader && (
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem] gap-2 sm:flex sm:items-center lg:shrink-0">
+                        <select
+                          aria-label={`Ministério de ${member.name}`}
+                          value={currentMin}
+                          onChange={(e) =>
+                            handleSwitchMinistry(member, e.target.value as MinistryChoice)
+                          }
+                          className={`${fieldClass} col-span-3 sm:w-40`}
+                        >
+                          <option value="PROJECAO">Projeção</option>
+                          <option value="MUSICA">Música</option>
+                          <option value="PROGRAMACAO">Programação</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          aria-pressed={memberIsCaptain}
+                          aria-label={`Capitão: ${member.name}`}
+                          onClick={() => handleToggleRoleFlag(member, 'CAPTAIN')}
+                          className={roleToggleClass(memberIsCaptain)}
+                        >
+                          {memberIsCaptain && <Check className="h-4 w-4" aria-hidden="true" />}
+                          <span>Capitão</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-pressed={memberIsLeader}
+                          aria-label={`Liderança: ${member.name}`}
+                          onClick={() => handleToggleRoleFlag(member, 'ADMIN')}
+                          className={roleToggleClass(memberIsLeader)}
+                        >
+                          {memberIsLeader && <Check className="h-4 w-4" aria-hidden="true" />}
+                          <span>Liderança</span>
+                        </button>
+
+                        {isSelf ? (
+                          <span aria-hidden="true" className="hidden sm:block sm:w-10" />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemoveId(confirming ? null : member.id)}
+                            title="Remover usuário"
+                            aria-label={`Remover ${member.name}`}
+                            aria-expanded={confirming}
+                            className={`inline-flex size-11 items-center justify-center rounded-lg border transition-colors sm:size-10 ${
+                              confirming
+                                ? 'border-danger/40 bg-danger/10 text-danger'
+                                : 'border-line text-ink-3 hover:border-danger/40 hover:text-danger'
+                            }`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {isLeader && confirming && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-ink-2">
+                        Remover <span className="font-medium text-ink">{member.name}</span> do
+                        portal? Esta ação não pode ser desfeita.
+                      </p>
+                      <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRemoveId(null)}
+                          className={secondaryBtnClass}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onRemoveMember(member.id);
+                            setConfirmRemoveId(null);
+                          }}
+                          className={dangerBtnClass}
+                        >
+                          Remover usuário
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
+
+      {/* Histórico */}
+      <section aria-labelledby="cfg-historico" className={sectionClass}>
+        <div className={`flex items-baseline justify-between gap-3 ${sectionHeadClass}`}>
+          <h2 id="cfg-historico" className="section-title">
+            Histórico recente
+          </h2>
+          <span className="text-xs text-ink-4">Últimas 12 alterações</span>
+        </div>
+
+        {recentLogs.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-ink-3 sm:px-5">
+            Nenhuma alteração registrada.
+          </p>
+        ) : (
+          <ol className="divide-y divide-line-soft">
+            {recentLogs.map((log) => (
+              <li
+                key={log.id}
+                className="grid grid-cols-[3rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 px-4 py-2.5 text-sm sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-baseline sm:px-5"
+              >
+                <span className="font-mono-tech text-xs text-ink-4">{log.timestamp}</span>
+                <p className="min-w-0 text-ink-3">
+                  <span className="font-medium text-ink">{log.actorName}</span> {log.detail}
+                  {log.reason && <span className="text-ink-4"> Motivo: {log.reason}</span>}
+                </p>
+                <span className="col-start-2 text-xs text-ink-4 sm:col-start-auto sm:text-right">
+                  {log.action}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      {/* Dados de demonstração (ação destrutiva, só Liderança) */}
+      {isLeader && (
+        <section aria-labelledby="cfg-demo" className={`${sectionClass} p-4 sm:p-5`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 id="cfg-demo" className="section-title">
+                Dados de demonstração
+              </h2>
+              <p className="mt-0.5 text-sm text-ink-3">
+                Descarta as alterações salvas neste navegador, inclusive mídias enviadas, e volta
+                ao conteúdo inicial.
+              </p>
+            </div>
+
+            {confirmReset ? (
+              <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                <p className="text-xs font-medium text-danger">Esta ação não pode ser desfeita.</p>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmReset(false)}
+                    className={secondaryBtnClass}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmReset(false);
+                      onResetDemo();
+                    }}
+                    className={dangerBtnClass}
+                  >
+                    Confirmar restauração
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className={`${dangerBtnClass} shrink-0`}
+              >
+                Restaurar dados de demonstração
+              </button>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

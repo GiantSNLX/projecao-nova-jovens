@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CheckCircle2, Minus, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { MemberUser, SaturdayMdoRecord } from '../types/portal';
 
 interface DevotionalTabProps {
@@ -10,6 +10,10 @@ interface DevotionalTabProps {
   records: SaturdayMdoRecord[];
   onSaveSaturdayMdo: (record: SaturdayMdoRecord) => void;
 }
+
+const DAY_OPTIONS = [0, 1, 2, 3, 4, 5];
+const VERSES_MIN = 5;
+const VERSES_MAX = 70;
 
 function formatDateBr(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
@@ -23,6 +27,59 @@ function isProjectionMember(m: MemberUser): boolean {
     return m.roles.includes('ADMIN') || m.roles.includes('CAPTAIN');
   }
   return true;
+}
+
+const clampVerses = (val: number) =>
+  Math.max(0, Math.min(VERSES_MAX, Math.round(val || 0)));
+
+const clampDays = (val: number) => Math.max(0, Math.min(5, val));
+
+const nowLabel = () =>
+  new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+/* Classes compartilhadas */
+const presenceTone = (isPresent: boolean) =>
+  isPresent ? 'border-ok/40 bg-ok/10 text-ok' : 'border-line text-ink-3';
+
+const versesTone = (value: number) =>
+  value >= VERSES_MIN ? 'border-ok/40 text-ok' : 'border-attn/50 text-attn';
+
+const cellFieldClass =
+  'font-mono-tech rounded-lg border bg-sunken px-2 text-center font-semibold focus:border-accent focus:outline-none';
+
+/** Seletor de 0 a 5 dias (M e O). */
+function DayPicker({
+  labelId,
+  value,
+  onChange,
+}: {
+  labelId: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div role="group" aria-labelledby={labelId} className="grid grid-cols-6 gap-1.5">
+      {DAY_OPTIONS.map((n) => {
+        const selected = value === n;
+        return (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={selected}
+            aria-label={n === 1 ? '1 dia' : `${n} dias`}
+            onClick={() => onChange(n)}
+            className={`font-mono-tech min-h-11 rounded-lg border text-sm font-semibold transition-colors sm:min-h-10 ${
+              selected
+                ? 'border-accent-solid bg-accent-solid text-white'
+                : 'btn-rb-surface border-line bg-surface text-ink-2'
+            }`}
+          >
+            {n}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function DevotionalTab({
@@ -64,8 +121,6 @@ export function DevotionalTab({
     setPrayerDays(rec?.prayerDays ?? 0);
   }, [activeUser.id, saturdayDate, records]);
 
-  const clampVerses = (val: number) => Math.max(0, Math.min(70, Math.round(val || 0)));
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveSaturdayMdo({
@@ -73,13 +128,10 @@ export function DevotionalTab({
       userId: activeUser.id,
       saturdayDate,
       present,
-      meditationDays: Math.max(0, Math.min(5, meditationDays)),
+      meditationDays: clampDays(meditationDays),
       memorizedVerses: clampVerses(memorizedVerses),
-      prayerDays: Math.max(0, Math.min(5, prayerDays)),
-      updatedAt: new Date().toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      prayerDays: clampDays(prayerDays),
+      updatedAt: nowLabel(),
     });
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2000);
@@ -97,354 +149,221 @@ export function DevotionalTab({
       userId: memberId,
       saturdayDate,
       present: patch.present ?? existing?.present ?? true,
-      meditationDays: Math.max(
-        0,
-        Math.min(5, patch.meditationDays ?? existing?.meditationDays ?? 0),
-      ),
+      meditationDays: clampDays(patch.meditationDays ?? existing?.meditationDays ?? 0),
       memorizedVerses: clampVerses(
         patch.memorizedVerses ?? existing?.memorizedVerses ?? 0,
       ),
-      prayerDays: Math.max(
-        0,
-        Math.min(5, patch.prayerDays ?? existing?.prayerDays ?? 0),
-      ),
-      updatedAt: new Date().toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      prayerDays: clampDays(patch.prayerDays ?? existing?.prayerDays ?? 0),
+      updatedAt: nowLabel(),
     });
   };
 
-  // For regular members, show only submitted rows from projection members; for Leaders, show all projection members so they can launch/edit anyone
+  // Voluntário vê só quem já registrou; Liderança vê toda a equipe para lançar e corrigir.
   const tableRows = useMemo(() => {
-    if (isLeader) {
-      return projectionMembers.map((member) => {
-        const rec = records.find(
-          (r) => r.userId === member.id && r.saturdayDate === saturdayDate,
-        );
-        return { member, rec };
-      });
-    }
-    return projectionMembers
-      .map((member) => ({
-        member,
-        rec: records.find(
-          (r) => r.userId === member.id && r.saturdayDate === saturdayDate,
-        ),
-      }))
-      .filter((row) => row.rec !== undefined);
+    const rows = projectionMembers.map((member) => ({
+      member,
+      rec: records.find(
+        (r) => r.userId === member.id && r.saturdayDate === saturdayDate,
+      ),
+    }));
+    return isLeader ? rows : rows.filter((row) => row.rec !== undefined);
   }, [isLeader, projectionMembers, records, saturdayDate]);
 
+  const registeredCount = tableRows.filter((row) => row.rec).length;
+  const presentCount = tableRows.filter((row) => row.rec?.present).length;
+  const versesOk = memorizedVerses >= VERSES_MIN;
+
+  const statusText = savedNotice
+    ? 'Registro salvo.'
+    : myExisting?.updatedAt
+      ? `Último envio às ${myExisting.updatedAt}.`
+      : myExisting
+        ? 'Registro enviado.'
+        : 'Nenhum registro enviado para este sábado.';
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-1 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="page-title">Controle de Meditação</h1>
-        <span className="font-mono-tech text-xs text-zinc-400">
-          Projeção · Sábado {formatDateBr(saturdayDate)}
-        </span>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-1 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <h1 className="page-title">Controle de meditação</h1>
+        <p className="text-sm text-ink-3">
+          Sábado <span className="font-mono-tech text-ink-2">{formatDateBr(saturdayDate)}</span>
+        </p>
       </div>
 
-      {/* Formulário individual (somente para quem é da Projeção) */}
+      {/* Registro individual (somente equipe de Projeção) */}
       {userIsFromProjection ? (
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-5"
+          aria-labelledby="mdo-form-title"
+          className="rounded-xl border border-line bg-surface"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="section-title">Seu MDO ({activeUser.name.split(' ')[0]})</h2>
-
-            <button
-              type="button"
-              role="switch"
-              aria-checked={present}
-              onClick={() => setPresent((p) => !p)}
-              className={`btn-rb-surface inline-flex min-h-[42px] items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition ${
-                present
-                  ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300'
-                  : 'border-white/12 bg-[#0B0C0F] text-zinc-400'
-              }`}
-            >
-              <span
-                className={`inline-flex h-5 w-5 items-center justify-center rounded border ${
-                  present
-                    ? 'border-emerald-400 bg-emerald-500 text-zinc-950'
-                    : 'border-white/20 bg-transparent'
-                }`}
-              >
-                {present && <Check className="h-3.5 w-3.5 stroke-[3]" />}
-              </span>
-              <span>{present ? 'Presente' : 'Ausente'}</span>
-            </button>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* M — Dias meditados (0 a 5) */}
-            <div className="rounded-lg border border-white/10 bg-[#0B0C0F] p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-white">M — Dias meditados</label>
-                <span className="font-mono-tech text-xs text-[#38BDF8]">{meditationDays}/5</span>
-              </div>
-              <div className="grid grid-cols-6 gap-1.5">
-                {[0, 1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setMeditationDays(n)}
-                    className={`font-mono-tech min-h-[42px] rounded-lg border text-sm font-semibold transition ${
-                      meditationDays === n
-                        ? 'btn-rb-primary border-[#0095FF] text-white'
-                        : 'btn-rb-surface border-white/12 bg-[#12141A] text-zinc-300'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-col gap-3 border-b border-line-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <h2 id="mdo-form-title" className="section-title">
+                Seu registro
+              </h2>
+              <p className="text-xs text-ink-4">
+                MDO da semana: meditação, versículos decorados e oração.
+              </p>
             </div>
 
-            {/* D — Versículos decorados (mín. 5, máx. 70) */}
-            <div className="rounded-lg border border-white/10 bg-[#0B0C0F] p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label htmlFor="mdo-d" className="text-sm font-medium text-white">
-                  D — Versículos
-                </label>
-                <span
-                  className={`text-xs font-medium ${
-                    memorizedVerses >= 5 ? 'text-emerald-400' : 'text-[#F5C41E]'
-                  }`}
-                >
-                  {memorizedVerses >= 5 ? 'Mín. 5 ok' : 'Mín. 5 (máx. 70)'}
-                </span>
+            <div
+              role="group"
+              aria-label="Presença no sábado"
+              className="grid grid-cols-2 rounded-lg border border-line bg-sunken p-0.5 sm:inline-grid"
+            >
+              <button
+                type="button"
+                aria-pressed={present}
+                onClick={() => setPresent(true)}
+                className={`min-h-11 rounded-md px-4 text-sm font-medium transition-colors sm:min-h-9 ${
+                  present ? 'bg-surface text-ok ring-1 ring-line' : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                Presente
+              </button>
+              <button
+                type="button"
+                aria-pressed={!present}
+                onClick={() => setPresent(false)}
+                className={`min-h-11 rounded-md px-4 text-sm font-medium transition-colors sm:min-h-9 ${
+                  !present ? 'bg-surface text-ink ring-1 ring-line' : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                Ausente
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-3 lg:gap-6">
+            {/* M: dias de meditação (0 a 5) */}
+            <div className="grid gap-2 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-4 lg:grid-cols-1 lg:items-start lg:gap-2">
+              <div className="flex items-baseline justify-between gap-2 sm:block lg:flex">
+                <p id="mdo-m-label" className="text-sm font-medium text-ink">
+                  <span className="font-mono-tech mr-1.5 text-ink-3">M</span>
+                  Dias de meditação
+                </p>
+                <p className="text-xs text-ink-4">0 a 5 na semana</p>
               </div>
-              <div className="flex items-center gap-2">
+              <DayPicker labelId="mdo-m-label" value={meditationDays} onChange={setMeditationDays} />
+            </div>
+
+            {/* D: versículos decorados (mín. 5, máx. 70) */}
+            <div className="grid gap-2 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-4 lg:grid-cols-1 lg:items-start lg:gap-2">
+              <div className="flex items-baseline justify-between gap-2 sm:block lg:flex">
+                <label htmlFor="mdo-d" className="block text-sm font-medium text-ink">
+                  <span className="font-mono-tech mr-1.5 text-ink-3">D</span>
+                  Versículos decorados
+                </label>
+                <p
+                  id="mdo-d-hint"
+                  className={`text-xs font-medium ${versesOk ? 'text-ok' : 'text-attn'}`}
+                >
+                  {versesOk ? 'Mínimo de 5 atingido' : 'Abaixo do mínimo de 5'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  aria-label="Diminuir"
+                  aria-label="Diminuir versículos"
+                  disabled={memorizedVerses <= 0}
                   onClick={() => setMemorizedVerses((v) => clampVerses(v - 1))}
-                  className="btn-rb-surface inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg border border-white/12 bg-[#12141A] text-white"
+                  className="btn-rb-surface inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 disabled:opacity-40 sm:size-10"
                 >
-                  <Minus className="h-4 w-4" />
+                  <Minus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <input
                   id="mdo-d"
                   type="number"
+                  inputMode="numeric"
                   min={0}
-                  max={70}
+                  max={VERSES_MAX}
+                  aria-describedby="mdo-d-hint"
                   value={memorizedVerses}
                   onChange={(e) => setMemorizedVerses(clampVerses(Number(e.target.value)))}
-                  className="font-mono-tech min-h-[42px] w-full rounded-lg border border-white/12 bg-[#12141A] px-3 text-center text-base font-semibold text-white focus:border-[#0095FF] focus:outline-none"
+                  className="font-mono-tech min-h-11 w-full min-w-0 rounded-lg border border-line bg-sunken px-3 text-center text-base font-semibold text-ink focus:border-accent focus:outline-none sm:min-h-10"
                 />
                 <button
                   type="button"
-                  aria-label="Aumentar"
+                  aria-label="Aumentar versículos"
+                  disabled={memorizedVerses >= VERSES_MAX}
                   onClick={() => setMemorizedVerses((v) => clampVerses(v + 1))}
-                  className="btn-rb-surface inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg border border-white/12 bg-[#12141A] text-white"
+                  className="btn-rb-surface inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 disabled:opacity-40 sm:size-10"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
-            {/* O — Orações (0 a 5) */}
-            <div className="rounded-lg border border-white/10 bg-[#0B0C0F] p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-white">O — Orações</label>
-                <span className="font-mono-tech text-xs text-[#38BDF8]">{prayerDays}/5</span>
+            {/* O: dias de oração (0 a 5) */}
+            <div className="grid gap-2 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-4 lg:grid-cols-1 lg:items-start lg:gap-2">
+              <div className="flex items-baseline justify-between gap-2 sm:block lg:flex">
+                <p id="mdo-o-label" className="text-sm font-medium text-ink">
+                  <span className="font-mono-tech mr-1.5 text-ink-3">O</span>
+                  Dias de oração
+                </p>
+                <p className="text-xs text-ink-4">0 a 5 na semana</p>
               </div>
-              <div className="grid grid-cols-6 gap-1.5">
-                {[0, 1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setPrayerDays(n)}
-                    className={`font-mono-tech min-h-[42px] rounded-lg border text-sm font-semibold transition ${
-                      prayerDays === n
-                        ? 'btn-rb-primary border-[#0095FF] text-white'
-                        : 'btn-rb-surface border-white/12 bg-[#12141A] text-zinc-300'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
+              <DayPicker labelId="mdo-o-label" value={prayerDays} onChange={setPrayerDays} />
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3">
-            {savedNotice && (
-              <span className="text-sm font-medium text-emerald-400">Salvo</span>
-            )}
+          <div className="flex flex-col-reverse gap-3 border-t border-line-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <p
+              role="status"
+              aria-live="polite"
+              className={`text-xs ${savedNotice ? 'font-medium text-ok' : 'text-ink-4'}`}
+            >
+              {statusText}
+            </p>
             <button
               type="submit"
-              className="btn-rb-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white"
+              className="btn-rb-primary inline-flex min-h-11 w-full items-center justify-center rounded-lg px-5 text-sm font-semibold text-white sm:min-h-10 sm:w-auto"
             >
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Salvar</span>
+              Salvar registro
             </button>
           </div>
         </form>
       ) : (
-        <div className="rounded-xl border border-white/10 bg-[#12141A] p-4 text-sm text-zinc-400">
-          O Controle de Meditação e Presença é exclusivo para membros da equipe de Projeção.
-        </div>
+        <p className="rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink-3 sm:px-5">
+          O registro de MDO é exclusivo para a equipe de Projeção.
+        </p>
       )}
 
-      {/* Planilha de Presença e MDO dos membros da Projeção */}
-      <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="section-title">Planilha — Equipe de Projeção</h2>
-          <span className="font-mono-tech text-xs text-zinc-400">
-            {tableRows.length} membros
-          </span>
+      {/* Acompanhamento da equipe de Projeção */}
+      <section aria-labelledby="mdo-team-title" className="rounded-xl border border-line bg-surface">
+        <div className="flex flex-col gap-2 border-b border-line-soft px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+          <div className="min-w-0">
+            <h2 id="mdo-team-title" className="section-title">
+              Equipe de Projeção
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-4">
+              M: dias de meditação (0 a 5). D: versículos decorados (mín. 5, máx. 70). O: dias
+              de oração (0 a 5).
+            </p>
+          </div>
+          <dl className="flex shrink-0 gap-4 text-xs text-ink-3">
+            <div className="flex items-baseline gap-1.5">
+              <dt>{isLeader ? 'Com registro' : 'Registros'}</dt>
+              <dd className="font-mono-tech font-semibold text-ink">
+                {isLeader ? `${registeredCount}/${tableRows.length}` : registeredCount}
+              </dd>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <dt>Presentes</dt>
+              <dd className="font-mono-tech font-semibold text-ink">{presentCount}</dd>
+            </div>
+          </dl>
         </div>
 
-        {/* Visualização no Celular: linhas de 2 andares sem estourar largura */}
-        <div className="mt-4 space-y-2.5 md:hidden">
-          {tableRows.map(({ member, rec }) => {
-            const isPresent = rec?.present ?? false;
-            const mVal = rec?.meditationDays ?? 0;
-            const dVal = rec?.memorizedVerses ?? 0;
-            const oVal = rec?.prayerDays ?? 0;
-
-            return (
-              <div
-                key={member.id}
-                className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3 space-y-2.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-white">
-                    {member.name}
-                  </span>
-
-                  {isLeader ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateMemberRecord(member.id, { present: !isPresent })
-                      }
-                      className={`inline-flex min-h-[34px] shrink-0 items-center rounded-md border px-2.5 text-xs font-semibold ${
-                        isPresent
-                          ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                          : 'border-white/12 bg-[#12141A] text-zinc-400'
-                      }`}
-                    >
-                      {isPresent ? 'Presente' : 'Ausente'}
-                    </button>
-                  ) : (
-                    <span
-                      className={`inline-flex shrink-0 items-center rounded-md border px-2.5 py-1 text-xs font-medium ${
-                        isPresent
-                          ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
-                          : 'border-white/12 bg-[#12141A] text-zinc-400'
-                      }`}
-                    >
-                      {isPresent ? 'Presente' : 'Ausente'}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
-                    <span className="block text-[10px] text-zinc-400">M (0–5)</span>
-                    {isLeader ? (
-                      <select
-                        aria-label={`M de ${member.name}`}
-                        value={mVal}
-                        onChange={(e) =>
-                          updateMemberRecord(member.id, {
-                            meditationDays: Number(e.target.value),
-                          })
-                        }
-                        className="font-mono-tech mt-1 min-h-[34px] w-full rounded border border-white/12 bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold text-white"
-                      >
-                        {[0, 1, 2, 3, 4, 5].map((n) => (
-                          <option key={n} value={n}>
-                            {n}/5
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="font-mono-tech mt-1 block text-xs font-semibold text-zinc-200">
-                        {mVal}/5
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
-                    <span className="block text-[10px] text-zinc-400">D (mín. 5)</span>
-                    {isLeader ? (
-                      <input
-                        type="number"
-                        min={0}
-                        max={70}
-                        aria-label={`D de ${member.name}`}
-                        value={dVal}
-                        onChange={(e) =>
-                          updateMemberRecord(member.id, {
-                            memorizedVerses: Number(e.target.value),
-                          })
-                        }
-                        className={`font-mono-tech mt-1 min-h-[34px] w-full rounded border bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold ${
-                          dVal >= 5
-                            ? 'border-emerald-500/40 text-emerald-300'
-                            : 'border-[#F5C41E]/40 text-[#F5C41E]'
-                        }`}
-                      />
-                    ) : (
-                      <span
-                        className={`font-mono-tech mt-1 block text-xs font-semibold ${
-                          dVal >= 5 ? 'text-emerald-300' : 'text-[#F5C41E]'
-                        }`}
-                      >
-                        {dVal}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="rounded border border-white/8 bg-[#12141A] p-2 text-center">
-                    <span className="block text-[10px] text-zinc-400">O (0–5)</span>
-                    {isLeader ? (
-                      <select
-                        aria-label={`O de ${member.name}`}
-                        value={oVal}
-                        onChange={(e) =>
-                          updateMemberRecord(member.id, {
-                            prayerDays: Number(e.target.value),
-                          })
-                        }
-                        className="font-mono-tech mt-1 min-h-[34px] w-full rounded border border-white/12 bg-[#0B0C0F] px-1.5 text-center text-xs font-semibold text-white"
-                      >
-                        {[0, 1, 2, 3, 4, 5].map((n) => (
-                          <option key={n} value={n}>
-                            {n}/5
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="font-mono-tech mt-1 block text-xs font-semibold text-zinc-200">
-                        {oVal}/5
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Tabela no Desktop */}
-        <div className="mt-4 hidden overflow-x-auto md:block">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs font-medium text-zinc-400">
-                <th className="py-2.5 pr-4">Membro (Projeção)</th>
-                <th className="px-3 py-2.5">Presença</th>
-                <th className="px-3 py-2.5 text-center">M (0–5)</th>
-                <th className="px-3 py-2.5 text-center">D (mín. 5)</th>
-                <th className="px-3 py-2.5 text-center">O (0–5)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/8">
+        {tableRows.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-ink-3 sm:px-5">
+            Nenhum registro enviado para este sábado.
+          </p>
+        ) : (
+          <>
+            {/* Celular: uma linha por membro, sem rolagem horizontal */}
+            <ul className="divide-y divide-line-soft md:hidden">
               {tableRows.map(({ member, rec }) => {
                 const isPresent = rec?.present ?? false;
                 const mVal = rec?.meditationDays ?? 0;
@@ -452,124 +371,274 @@ export function DevotionalTab({
                 const oVal = rec?.prayerDays ?? 0;
 
                 return (
-                  <tr key={member.id}>
-                    <td className="py-3 pr-4 font-medium text-white">
-                      {member.name}
-                    </td>
+                  <li key={member.id} className="space-y-2.5 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink">{member.name}</p>
+                        <p className="text-xs text-ink-4">
+                          {!rec
+                            ? 'Sem registro'
+                            : rec.updatedAt
+                              ? `Atualizado às ${rec.updatedAt}`
+                              : 'Registro enviado'}
+                        </p>
+                      </div>
 
-                    {/* Presença */}
-                    <td className="px-3 py-3">
                       {isLeader ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            updateMemberRecord(member.id, { present: !isPresent })
-                          }
-                          className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition ${
-                            isPresent
-                              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                              : 'border-white/12 bg-[#0B0C0F] text-zinc-400'
-                          }`}
+                          aria-pressed={isPresent}
+                          aria-label={`Presença de ${member.name}`}
+                          onClick={() => updateMemberRecord(member.id, { present: !isPresent })}
+                          className={`inline-flex min-h-11 shrink-0 items-center rounded-lg border px-3 text-xs font-semibold ${presenceTone(isPresent)}`}
                         >
                           {isPresent ? 'Presente' : 'Ausente'}
                         </button>
                       ) : (
                         <span
-                          className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${
-                            isPresent
-                              ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
-                              : 'border-white/12 bg-[#0B0C0F] text-zinc-400'
-                          }`}
+                          className={`inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-xs font-medium ${presenceTone(isPresent)}`}
                         >
                           {isPresent ? 'Presente' : 'Ausente'}
                         </span>
                       )}
-                    </td>
+                    </div>
 
-                    {/* M (0 a 5) */}
-                    <td className="px-3 py-3 text-center">
-                      {isLeader ? (
-                        <select
-                          aria-label={`M de ${member.name}`}
-                          value={mVal}
-                          onChange={(e) =>
-                            updateMemberRecord(member.id, {
-                              meditationDays: Number(e.target.value),
-                            })
-                          }
-                          className="font-mono-tech min-h-[34px] rounded-md border border-white/12 bg-[#0B0C0F] px-2 text-xs font-semibold text-white"
-                        >
-                          {[0, 1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>
-                              {n}/5
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="font-mono-tech text-zinc-200">{mVal}/5</span>
-                      )}
-                    </td>
-
-                    {/* D (0 a 70, mín 5) */}
-                    <td className="px-3 py-3 text-center">
-                      {isLeader ? (
-                        <input
-                          type="number"
-                          min={0}
-                          max={70}
-                          aria-label={`D de ${member.name}`}
-                          value={dVal}
-                          onChange={(e) =>
-                            updateMemberRecord(member.id, {
-                              memorizedVerses: Number(e.target.value),
-                            })
-                          }
-                          className={`font-mono-tech min-h-[34px] w-16 rounded-md border bg-[#0B0C0F] px-2 text-center text-xs font-semibold ${
-                            dVal >= 5
-                              ? 'border-emerald-500/40 text-emerald-300'
-                              : 'border-[#F5C41E]/40 text-[#F5C41E]'
-                          }`}
-                        />
-                      ) : (
-                        <span
-                          className={`font-mono-tech font-semibold ${
-                            dVal >= 5 ? 'text-emerald-300' : 'text-[#F5C41E]'
-                          }`}
-                        >
-                          {dVal}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* O (0 a 5) */}
-                    <td className="px-3 py-3 text-center">
-                      {isLeader ? (
-                        <select
-                          aria-label={`O de ${member.name}`}
-                          value={oVal}
-                          onChange={(e) =>
-                            updateMemberRecord(member.id, {
-                              prayerDays: Number(e.target.value),
-                            })
-                          }
-                          className="font-mono-tech min-h-[34px] rounded-md border border-white/12 bg-[#0B0C0F] px-2 text-xs font-semibold text-white"
-                        >
-                          {[0, 1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>
-                              {n}/5
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="font-mono-tech text-zinc-200">{oVal}/5</span>
-                      )}
-                    </td>
-                  </tr>
+                    {isLeader ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="block">
+                          <span className="mb-1 block text-xs text-ink-3">M (0 a 5)</span>
+                          <select
+                            aria-label={`M de ${member.name}`}
+                            value={mVal}
+                            onChange={(e) =>
+                              updateMemberRecord(member.id, {
+                                meditationDays: Number(e.target.value),
+                              })
+                            }
+                            className={`${cellFieldClass} min-h-11 w-full border-line text-base text-ink`}
+                          >
+                            {DAY_OPTIONS.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs text-ink-3">D (mín. 5)</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={VERSES_MAX}
+                            aria-label={`D de ${member.name}`}
+                            value={dVal}
+                            onChange={(e) =>
+                              updateMemberRecord(member.id, {
+                                memorizedVerses: Number(e.target.value),
+                              })
+                            }
+                            className={`${cellFieldClass} min-h-11 w-full text-base ${versesTone(dVal)}`}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs text-ink-3">O (0 a 5)</span>
+                          <select
+                            aria-label={`O de ${member.name}`}
+                            value={oVal}
+                            onChange={(e) =>
+                              updateMemberRecord(member.id, {
+                                prayerDays: Number(e.target.value),
+                              })
+                            }
+                            className={`${cellFieldClass} min-h-11 w-full border-line text-base text-ink`}
+                          >
+                            {DAY_OPTIONS.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ) : (
+                      <dl className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <dt className="text-ink-3">M (0 a 5)</dt>
+                          <dd className="font-mono-tech text-sm font-semibold text-ink-2">{mVal}/5</dd>
+                        </div>
+                        <div>
+                          <dt className="text-ink-3">D (mín. 5)</dt>
+                          <dd
+                            className={`font-mono-tech text-sm font-semibold ${
+                              dVal >= VERSES_MIN ? 'text-ok' : 'text-attn'
+                            }`}
+                          >
+                            {dVal}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-ink-3">O (0 a 5)</dt>
+                          <dd className="font-mono-tech text-sm font-semibold text-ink-2">{oVal}/5</dd>
+                        </div>
+                      </dl>
+                    )}
+                  </li>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+
+            {/* Tablet e desktop: tabela */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-line-soft text-xs text-ink-3">
+                    <th scope="col" className="px-5 py-2.5 font-medium">
+                      Membro
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-medium">
+                      Presença
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-center font-medium">
+                      M <span className="font-normal text-ink-4">0 a 5</span>
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-center font-medium">
+                      D <span className="font-normal text-ink-4">mín. 5</span>
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-center font-medium">
+                      O <span className="font-normal text-ink-4">0 a 5</span>
+                    </th>
+                    <th scope="col" className="px-5 py-2.5 text-right font-medium">
+                      Atualizado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line-soft">
+                  {tableRows.map(({ member, rec }) => {
+                    const isPresent = rec?.present ?? false;
+                    const mVal = rec?.meditationDays ?? 0;
+                    const dVal = rec?.memorizedVerses ?? 0;
+                    const oVal = rec?.prayerDays ?? 0;
+
+                    return (
+                      <tr key={member.id}>
+                        <th scope="row" className="px-5 py-2.5 text-left font-medium text-ink">
+                          {member.name}
+                        </th>
+
+                        <td className="px-3 py-2.5">
+                          {isLeader ? (
+                            <button
+                              type="button"
+                              aria-pressed={isPresent}
+                              aria-label={`Presença de ${member.name}`}
+                              onClick={() =>
+                                updateMemberRecord(member.id, { present: !isPresent })
+                              }
+                              className={`inline-flex min-h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors ${presenceTone(isPresent)} ${isPresent ? '' : 'hover:bg-ink/5'}`}
+                            >
+                              {isPresent ? 'Presente' : 'Ausente'}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${presenceTone(isPresent)}`}
+                            >
+                              {isPresent ? 'Presente' : 'Ausente'}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-2.5 text-center">
+                          {isLeader ? (
+                            <select
+                              aria-label={`M de ${member.name}`}
+                              value={mVal}
+                              onChange={(e) =>
+                                updateMemberRecord(member.id, {
+                                  meditationDays: Number(e.target.value),
+                                })
+                              }
+                              className={`${cellFieldClass} min-h-8 w-16 border-line text-sm text-ink`}
+                            >
+                              {DAY_OPTIONS.map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="font-mono-tech text-ink-2">{mVal}/5</span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-2.5 text-center">
+                          {isLeader ? (
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              max={VERSES_MAX}
+                              aria-label={`D de ${member.name}`}
+                              title={dVal >= VERSES_MIN ? undefined : 'Abaixo do mínimo de 5'}
+                              value={dVal}
+                              onChange={(e) =>
+                                updateMemberRecord(member.id, {
+                                  memorizedVerses: Number(e.target.value),
+                                })
+                              }
+                              className={`${cellFieldClass} min-h-8 w-16 text-sm ${versesTone(dVal)}`}
+                            />
+                          ) : (
+                            <span
+                              className={`font-mono-tech font-semibold ${
+                                dVal >= VERSES_MIN ? 'text-ok' : 'text-attn'
+                              }`}
+                            >
+                              {dVal}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-2.5 text-center">
+                          {isLeader ? (
+                            <select
+                              aria-label={`O de ${member.name}`}
+                              value={oVal}
+                              onChange={(e) =>
+                                updateMemberRecord(member.id, {
+                                  prayerDays: Number(e.target.value),
+                                })
+                              }
+                              className={`${cellFieldClass} min-h-8 w-16 border-line text-sm text-ink`}
+                            >
+                              {DAY_OPTIONS.map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="font-mono-tech text-ink-2">{oVal}/5</span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-2.5 text-right text-xs text-ink-4">
+                          {!rec ? (
+                            'Sem registro'
+                          ) : rec.updatedAt ? (
+                            <span className="font-mono-tech">{rec.updatedAt}</span>
+                          ) : (
+                            'Enviado'
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

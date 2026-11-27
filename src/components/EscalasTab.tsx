@@ -1,16 +1,5 @@
-import { useMemo, useState } from 'react';
-import {
-  Archive,
-  Building2,
-  CalendarPlus,
-  CheckCircle2,
-  Clock,
-  DoorOpen,
-  Plus,
-  RotateCcw,
-  UserCheck,
-  XCircle,
-} from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Archive, CalendarPlus, Check, Plus, RotateCcw } from 'lucide-react';
 import type {
   AttendanceStatus,
   DeskPosition,
@@ -56,6 +45,23 @@ const ALL_POSITIONS: DeskPosition[] = [
   'APOIO',
 ];
 
+/* Padrões visuais da aba (tokens de tema; nada de cor fixa) */
+const BTN_BASE =
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors lg:min-h-9';
+const BTN_PRIMARY = `${BTN_BASE} btn-rb-primary font-semibold`;
+const BTN_SECONDARY = `${BTN_BASE} btn-rb-surface border border-line font-medium text-ink-2 hover:text-ink`;
+const FIELD =
+  'min-h-11 w-full rounded-lg border border-line bg-sunken px-3 text-base text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none lg:min-h-9 lg:text-sm';
+const LABEL = 'mb-1 block text-xs text-ink-3';
+const CARD = 'rounded-xl border border-line bg-surface';
+const CARD_HEADER = 'border-b border-line px-4 py-3';
+
+const PRESENCE_INFO: Record<AttendanceStatus, { label: string; className: string }> = {
+  CONFIRMED: { label: 'Confirmada', className: 'border-ok/30 bg-ok/10 text-ok' },
+  PENDING: { label: 'Pendente', className: 'border-attn/30 bg-attn/10 text-attn' },
+  DECLINED: { label: 'Ausência informada', className: 'border-danger/30 bg-danger/10 text-danger' },
+};
+
 function formatDateBr(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
   if (!y || !m || !d) return isoDate;
@@ -66,7 +72,30 @@ function getLocationLabel(locationType: ScheduleLocationType, roomName?: string)
   if (locationType === 'SALA') {
     return roomName?.trim() ? roomName.trim() : 'Sala';
   }
-  return 'Auditório Principal';
+  return 'Auditório principal';
+}
+
+function plural(n: number, singular: string, pluralForm: string): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
+function PresenceBadge({ status }: { status: AttendanceStatus }) {
+  const info = PRESENCE_INFO[status];
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium ${info.className}`}
+    >
+      {info.label}
+    </span>
+  );
+}
+
+function OnDeskBadge() {
+  return (
+    <span className="inline-flex items-center whitespace-nowrap rounded-md bg-ok-solid px-2 py-0.5 text-xs font-medium text-white">
+      Na mesa
+    </span>
+  );
 }
 
 export function EscalasTab({
@@ -182,14 +211,14 @@ export function EscalasTab({
     const parallelNum = sameDateSchedules.length + 1;
     const createdId = onAddSchedule({
       date: activeSchedule.date,
-      title: `${activeSchedule.title} — Programação ${parallelNum}`,
+      title: `${activeSchedule.title} · Sala ${parallelNum}`,
       locationType: 'SALA',
       roomName: `Sala ${parallelNum}`,
     });
     setSelectedScheduleId(createdId);
   };
 
-  const handleCreateSchedule = (e: React.FormEvent) => {
+  const handleCreateSchedule = (e: FormEvent) => {
     e.preventDefault();
     if (!newDate || !newTitle.trim()) return;
     const createdId = onAddSchedule({
@@ -203,388 +232,397 @@ export function EscalasTab({
     setShowNewForm(false);
   };
 
+  const subTabs: { id: EscalaSubTab; label: string; count?: number }[] = [
+    { id: 'ver', label: 'Próximas' },
+    ...(isLeader ? [{ id: 'montar' as const, label: 'Montar escala' }] : []),
+    { id: 'arquivados', label: 'Arquivadas', count: archivedSchedules.length },
+  ];
+
+  const showSelector =
+    activeSubTab !== 'arquivados' &&
+    (upcomingSchedules.length > 0 || (activeSubTab === 'montar' && isLeader));
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="page-title">Escalas</h1>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="page-title">Escalas</h1>
 
         <div
-          className={`grid w-full rounded-lg border border-white/12 bg-[#12141A] p-1 sm:inline-flex sm:w-auto ${
+          role="group"
+          aria-label="Visualização das escalas"
+          className={`grid w-full gap-0.5 rounded-lg border border-line bg-sunken p-0.5 sm:inline-flex sm:w-auto ${
             isLeader ? 'grid-cols-3' : 'grid-cols-2'
           }`}
         >
-          <button
-            type="button"
-            onClick={() => setSubTab('ver')}
-            className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
-              activeSubTab === 'ver'
-                ? 'bg-[#0095FF] text-white'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Semana
-          </button>
-          {isLeader && (
-            <button
-              type="button"
-              onClick={() => setSubTab('montar')}
-              className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
-                activeSubTab === 'montar'
-                  ? 'bg-[#0095FF] text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Montar escala
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSubTab('arquivados')}
-            className={`min-h-[40px] rounded-md px-2 text-xs font-medium transition-colors sm:px-3.5 sm:text-sm ${
-              activeSubTab === 'arquivados'
-                ? 'bg-[#0095FF] text-white'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Arquivados ({archivedSchedules.length})
-          </button>
+          {subTabs.map((tab) => {
+            const selected = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setSubTab(tab.id)}
+                className={`inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors sm:min-h-9 ${
+                  selected ? 'bg-surface text-ink shadow-sm' : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                {tab.label}
+                {tab.count !== undefined && (
+                  <span className="font-mono-tech text-xs text-ink-3">{tab.count}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Seletor dos próximos sábados / múltiplos eventos no mesmo dia */}
-      {activeSubTab !== 'arquivados' && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {upcomingSchedules.map((sched) => {
-          const isSelected = activeSchedule?.id === sched.id;
-          const locLabel = getLocationLabel(sched.locationType, sched.roomName);
-          return (
-            <button
-              key={sched.id}
-              type="button"
-              onClick={() => setSelectedScheduleId(sched.id)}
-              className={`min-h-[54px] w-full rounded-lg border px-3.5 py-2 text-left transition-colors ${
-                isSelected
-                  ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-                  : 'border-white/10 bg-[#12141A] text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 text-xs opacity-85">
-                <span className="font-mono-tech">{formatDateBr(sched.date)}</span>
-                <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
-                  {locLabel}
+      {/* Seletor de escalas programadas (inclui eventos paralelos na mesma data) */}
+      {showSelector && (
+        <div
+          role="group"
+          aria-label="Escalas programadas"
+          className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+        >
+          {upcomingSchedules.map((sched) => {
+            const isSelected = activeSchedule?.id === sched.id;
+            return (
+              <button
+                key={sched.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => setSelectedScheduleId(sched.id)}
+                className={`flex min-h-11 w-52 shrink-0 flex-col items-start justify-center gap-0.5 rounded-lg border px-3 py-1.5 text-left transition-colors sm:w-56 ${
+                  isSelected
+                    ? 'border-accent bg-accent/10'
+                    : 'border-line bg-surface hover:bg-ink/5'
+                }`}
+              >
+                <span className="flex w-full items-center justify-between gap-2 text-xs text-ink-3">
+                  <span className="font-mono-tech">{formatDateBr(sched.date)}</span>
+                  <span className="truncate">
+                    {getLocationLabel(sched.locationType, sched.roomName)}
+                  </span>
                 </span>
-              </div>
-              <div className="mt-0.5 truncate text-sm font-medium text-white">{sched.title}</div>
-            </button>
-          );
-        })}
+                <span className="w-full truncate text-sm font-medium text-ink">{sched.title}</span>
+              </button>
+            );
+          })}
 
-        {activeSubTab === 'montar' && isLeader && (
-          <button
-            type="button"
-            onClick={() => setShowNewForm((prev) => !prev)}
-            className="inline-flex min-h-[54px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3.5 text-sm font-medium text-zinc-300 hover:border-[#0095FF] hover:text-white"
-          >
-            <CalendarPlus className="h-4 w-4 text-[#0095FF]" />
-            <span>Novo evento</span>
-          </button>
-        )}
+          {activeSubTab === 'montar' && isLeader && (
+            <button
+              type="button"
+              aria-expanded={showNewForm}
+              onClick={() => setShowNewForm((prev) => !prev)}
+              className="inline-flex min-h-11 w-40 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-sm font-medium text-ink-2 transition-colors hover:bg-ink/5 hover:text-ink"
+            >
+              <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+              Novo evento
+            </button>
+          )}
         </div>
       )}
 
-      {/* Formulário para criar evento adicional (inclusive no mesmo dia!) */}
+      {/* Novo evento (pode coincidir com a data de outro evento) */}
       {activeSubTab === 'montar' && isLeader && showNewForm && (
-        <form
-          onSubmit={handleCreateSchedule}
-          className="rounded-xl border border-[#0095FF]/35 bg-[#12141A] p-4 space-y-3"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">
-              Criar culto / evento na escala
-            </h2>
-            <button
-              type="button"
-              onClick={() => setShowNewForm(false)}
-              className="text-xs text-zinc-400 hover:text-white"
-            >
-              Fechar
-            </button>
+        <form onSubmit={handleCreateSchedule} className={CARD}>
+          <div className={CARD_HEADER}>
+            <h2 className="section-title">Novo evento</h2>
+            <p className="mt-0.5 text-xs text-ink-3">
+              Pode ser criado na mesma data de outro evento, em outra sala.
+            </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block">
-              <span className="mb-1 block text-xs text-zinc-400">Data (pode repetir o dia)</span>
+              <span className={LABEL}>Data</span>
               <input
                 type="date"
                 required
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="font-mono-tech min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+                className={`${FIELD} font-mono-tech`}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs text-zinc-400">Nome / Tema</span>
+              <span className={LABEL}>Nome do evento</span>
               <input
                 type="text"
                 required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Ex.: Culto Jovens, Sala Teen..."
-                className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                placeholder="Ex.: Culto de jovens"
+                className={FIELD}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs text-zinc-400">Local</span>
+              <span className={LABEL}>Local</span>
               <select
                 value={newLocationType}
                 onChange={(e) => setNewLocationType(e.target.value as ScheduleLocationType)}
-                className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+                className={FIELD}
               >
-                <option value="AUDITORIO_PRINCIPAL">Auditório Principal (6 funções)</option>
-                <option value="SALA">Sala (somente Principal e Retorno)</option>
+                <option value="AUDITORIO_PRINCIPAL">Auditório principal (6 posições)</option>
+                <option value="SALA">Sala (Principal e Retorno)</option>
               </select>
             </label>
 
             {newLocationType === 'SALA' && (
               <label className="block">
-                <span className="mb-1 block text-xs text-zinc-400">Qual sala?</span>
+                <span className={LABEL}>Nome da sala</span>
                 <input
                   type="text"
                   required
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="Ex.: Sala 2"
-                  className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                  className={FIELD}
                 />
               </label>
             )}
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="min-h-[44px] rounded-lg bg-[#0095FF] px-4 text-sm font-semibold text-white hover:bg-[#0082E0]"
-            >
-              Criar evento na escala
+          <div className="flex flex-col-reverse gap-2 border-t border-line px-4 py-3 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setShowNewForm(false)} className={BTN_SECONDARY}>
+              Cancelar
+            </button>
+            <button type="submit" className={BTN_PRIMARY}>
+              Criar evento
             </button>
           </div>
         </form>
       )}
 
-      {/* SUB-ABA 1: VISUALIZAÇÃO LIMPA DA ESCALA */}
-      {activeSubTab === 'ver' && activeSchedule && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-white">{activeSchedule.title}</span>
-              <span className="inline-flex items-center gap-1 rounded border border-white/10 bg-[#12141A] px-2 py-0.5 text-xs text-zinc-300">
-                {activeSchedule.locationType === 'SALA' ? (
-                  <DoorOpen className="h-3.5 w-3.5 text-[#0095FF]" />
-                ) : (
-                  <Building2 className="h-3.5 w-3.5 text-[#0095FF]" />
-                )}
-                {getLocationLabel(activeSchedule.locationType, activeSchedule.roomName)}
-              </span>
-            </div>
-            <span className="font-mono-tech text-xs text-zinc-400">
-              {formatDateBr(activeSchedule.date)} · {activeSchedule.assignments.length} funções
-            </span>
-          </div>
-
-          <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
-            {activeSchedule.assignments.map((assignment) => {
-              const pos = DESK_POSITION_INFO[assignment.position];
-              const member = members.find((m) => m.id === assignment.userId);
-              const isMe = assignment.userId === activeUser.id;
-              const isCurrentSaturday = activeSchedule.date === state.serviceDate;
-
-              return (
-                <div
-                  key={assignment.id}
-                  className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ${
-                    isMe ? 'bg-[#0095FF]/8' : ''
-                  }`}
-                >
-                  <div className="flex min-w-0 items-center justify-between gap-4 sm:justify-start">
-                    <div className="w-24 shrink-0 text-sm font-semibold text-zinc-400">
-                      {pos.label}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-base font-medium text-white">
-                          {member?.name ?? 'A definir'}
-                        </span>
-                        {isMe && (
-                          <span className="rounded bg-[#0095FF]/20 px-1.5 py-0.5 text-[11px] font-semibold text-[#38BDF8]">
-                            Você
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    {!isMe ? (
-                      assignment.servingOnDesk ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400">
-                          <UserCheck className="h-4 w-4" />
-                          <span>Servindo na mesa</span>
-                        </span>
-                      ) : assignment.attendanceStatus === 'CONFIRMED' ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm text-zinc-300">
-                          <CheckCircle2 className="h-4 w-4 text-[#0095FF]" />
-                          <span>Confirmado</span>
-                        </span>
-                      ) : assignment.attendanceStatus === 'DECLINED' ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm text-red-400">
-                          <XCircle className="h-4 w-4" />
-                          <span>Não vai</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-sm text-zinc-500">
-                          <Clock className="h-4 w-4" />
-                          <span>Pendente</span>
-                        </span>
-                      )
-                    ) : (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="grid grid-cols-2 gap-2 sm:flex">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onUpdateAttendance(activeSchedule.id, assignment.id, 'CONFIRMED')
-                            }
-                            className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-medium transition-colors ${
-                              assignment.attendanceStatus === 'CONFIRMED'
-                                ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-                                : 'border-white/12 text-zinc-300 hover:bg-white/5'
-                            }`}
-                          >
-                            Confirmar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onUpdateAttendance(activeSchedule.id, assignment.id, 'DECLINED')
-                            }
-                            className={`min-h-[44px] rounded-lg border px-3.5 text-sm font-medium transition-colors ${
-                              assignment.attendanceStatus === 'DECLINED'
-                                ? 'border-red-500/60 bg-red-500/15 text-red-300'
-                                : 'border-white/12 text-zinc-300 hover:bg-white/5'
-                            }`}
-                          >
-                            Não vou
-                          </button>
-                        </div>
-
-                        {isCurrentSaturday && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onToggleServingOnDesk(activeSchedule.id, assignment.id)
-                            }
-                            className={`min-h-[44px] rounded-lg px-4 text-sm font-semibold transition-colors ${
-                              assignment.servingOnDesk
-                                ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                                : 'bg-[#0095FF] text-white hover:bg-[#0082E0]'
-                            }`}
-                          >
-                            {assignment.servingOnDesk
-                              ? 'Servindo na mesa'
-                              : 'Já estou servindo na mesa'}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* Sem escala programada */}
+      {activeSubTab !== 'arquivados' && !activeSchedule && (
+        <div className={`${CARD} px-4 py-6 text-center text-sm text-ink-3`}>
+          Nenhuma escala programada.
+          {isLeader &&
+            (activeSubTab === 'montar'
+              ? ' Use Novo evento para criar a próxima.'
+              : ' Crie um evento em Montar escala.')}
         </div>
       )}
 
-      {/* SUB-ABA 2: MONTAR ESCALA + LOCAL/SALA + RODÍZIO (SOMENTE LIDERANÇA) */}
+      {/* PRÓXIMAS: posição, pessoa e presença */}
+      {activeSubTab === 'ver' && activeSchedule && (() => {
+        const isServiceDay = activeSchedule.date === state.serviceDate;
+        const confirmedCount = activeSchedule.assignments.filter(
+          (a) => a.attendanceStatus === 'CONFIRMED',
+        ).length;
+
+        return (
+          <section className={CARD} aria-labelledby="escala-atual-titulo">
+            <div
+              className={`${CARD_HEADER} flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-4`}
+            >
+              <div className="min-w-0">
+                <h2 id="escala-atual-titulo" className="section-title truncate">
+                  {activeSchedule.title}
+                </h2>
+                <p className="mt-0.5 text-xs text-ink-3">
+                  <span className="font-mono-tech">{formatDateBr(activeSchedule.date)}</span>
+                  {' · '}
+                  {getLocationLabel(activeSchedule.locationType, activeSchedule.roomName)}
+                </p>
+              </div>
+              <p className="shrink-0 text-xs text-ink-3">
+                {plural(activeSchedule.assignments.length, 'posição', 'posições')}
+                {' · '}
+                {plural(confirmedCount, 'confirmada', 'confirmadas')}
+              </p>
+            </div>
+
+            <div
+              aria-hidden="true"
+              className="hidden grid-cols-[8rem_minmax(0,1fr)_auto] gap-x-4 border-b border-line-soft px-4 py-2 text-xs text-ink-3 md:grid"
+            >
+              <span>Posição</span>
+              <span>Pessoa</span>
+              <span className="text-right">Presença</span>
+            </div>
+
+            <ul className="divide-y divide-line-soft">
+              {activeSchedule.assignments.map((assignment) => {
+                const pos = DESK_POSITION_INFO[assignment.position];
+                const member = members.find((m) => m.id === assignment.userId);
+                const isMe = assignment.userId === activeUser.id;
+                const status = assignment.attendanceStatus;
+                const onDesk = status === 'CONFIRMED' && assignment.servingOnDesk;
+
+                const confirm = () =>
+                  onUpdateAttendance(activeSchedule.id, assignment.id, 'CONFIRMED');
+                const decline = () =>
+                  onUpdateAttendance(activeSchedule.id, assignment.id, 'DECLINED');
+                const undo = () =>
+                  onUpdateAttendance(activeSchedule.id, assignment.id, 'PENDING');
+                const toggleDesk = () =>
+                  onToggleServingOnDesk(activeSchedule.id, assignment.id);
+                // Entrar na mesa confirma a presença; se o registro já marca a mesa
+                // sem presença confirmada, basta confirmar.
+                const enterDesk = () =>
+                  assignment.servingOnDesk ? confirm() : toggleDesk();
+
+                const canEnterDesk = isMe && isServiceDay && status !== 'DECLINED' && !onDesk;
+                const actions: { key: string; label: string; onClick: () => void; primary: boolean }[] =
+                  [];
+                if (isMe) {
+                  if (canEnterDesk) {
+                    actions.push({ key: 'entrar', label: 'Entrar na mesa', onClick: enterDesk, primary: true });
+                  }
+                  if (status !== 'CONFIRMED') {
+                    actions.push({
+                      key: 'confirmar',
+                      label: 'Confirmar presença',
+                      onClick: confirm,
+                      primary: !canEnterDesk,
+                    });
+                  }
+                  if (onDesk) {
+                    actions.push({ key: 'sair', label: 'Sair da mesa', onClick: toggleDesk, primary: false });
+                  }
+                  if (status !== 'DECLINED') {
+                    actions.push({ key: 'ausencia', label: 'Informar ausência', onClick: decline, primary: false });
+                  }
+                  if (status !== 'PENDING') {
+                    actions.push({ key: 'desfazer', label: 'Desfazer resposta', onClick: undo, primary: false });
+                  }
+                }
+
+                return (
+                  <li
+                    key={assignment.id}
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 md:grid-cols-[8rem_minmax(0,1fr)_auto] md:gap-x-4 ${
+                      isMe ? 'bg-accent/5' : ''
+                    }`}
+                  >
+                    <span className="col-start-1 row-start-1 text-xs text-ink-3 md:text-sm md:font-medium md:text-ink-2">
+                      {pos.label}
+                    </span>
+
+                    <span className="col-start-1 row-start-2 flex min-w-0 items-center gap-2 md:col-start-2 md:row-start-1">
+                      <span className="truncate text-sm font-medium text-ink">
+                        {member?.name ?? 'A definir'}
+                      </span>
+                      {isMe && (
+                        <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">
+                          Você
+                        </span>
+                      )}
+                    </span>
+
+                    <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1 justify-self-end md:col-start-3 md:row-span-1 md:flex-row md:items-center md:gap-1.5">
+                      <PresenceBadge status={status} />
+                      {onDesk && <OnDeskBadge />}
+                    </span>
+
+                    {actions.length > 0 && (
+                      <div className="col-span-2 row-start-3 mt-2.5 flex flex-wrap gap-2 md:col-span-2 md:col-start-2 md:row-start-2 md:mt-2">
+                        {actions.map((action) => (
+                          <button
+                            key={action.key}
+                            type="button"
+                            onClick={action.onClick}
+                            className={`${action.primary ? BTN_PRIMARY : BTN_SECONDARY} grow basis-32 md:grow-0 md:basis-auto`}
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })()}
+
+      {/* MONTAR ESCALA (somente liderança) */}
       {activeSubTab === 'montar' && isLeader && activeSchedule && (
-        <div className="space-y-8">
-          <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-            <div className="border-b border-white/10 pb-4 space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="section-title">
-                    Montar escala — {formatDateBr(activeSchedule.date)}
-                  </h2>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={handleQuickAddParallelOnSameDay}
-                    className="btn-rb-primary inline-flex min-h-[42px] items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold text-white"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Programação neste culto</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onToggleArchiveSchedule(activeSchedule.id, true)}
-                    className="btn-rb-surface inline-flex min-h-[42px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-300"
-                  >
-                    <Archive className="h-3.5 w-3.5 text-zinc-400" />
-                    <span>Arquivar</span>
-                  </button>
-                </div>
+        <div className="space-y-4">
+          <section className={CARD} aria-labelledby="montar-escala-titulo">
+            <div
+              className={`${CARD_HEADER} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
+            >
+              <div className="min-w-0">
+                <h2 id="montar-escala-titulo" className="section-title">
+                  Montar escala
+                </h2>
+                <p className="mt-0.5 text-xs text-ink-3">
+                  <span className="font-mono-tech">{formatDateBr(activeSchedule.date)}</span>
+                  {' · '}
+                  {getLocationLabel(activeSchedule.locationType, activeSchedule.roomName)}
+                </p>
               </div>
 
-              {/* Abas trocáveis quando há 1+ escalas/programações neste mesmo culto/dia */}
-              {sameDateSchedules.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/8 bg-[#0B0C0F] p-2">
-                  <span className="px-1.5 text-[11px] font-medium text-zinc-400">
-                    Programações deste dia ({sameDateSchedules.length}):
-                  </span>
-                  {sameDateSchedules.map((sd, idx) => {
-                    const isCurr = sd.id === activeSchedule.id;
-                    return (
-                      <button
-                        key={sd.id}
-                        type="button"
-                        onClick={() => setSelectedScheduleId(sd.id)}
-                        className={`min-h-[36px] rounded-md px-3 text-xs font-semibold transition ${
-                          isCurr
-                            ? 'bg-[#0095FF] text-white'
-                            : 'border border-white/10 text-zinc-300 hover:bg-white/5'
-                        }`}
-                      >
-                        {idx + 1}. {getLocationLabel(sd.locationType, sd.roomName)} · {sd.title}
-                      </button>
-                    );
-                  })}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleQuickAddParallelOnSameDay}
+                  title="Cria um evento paralelo em outra sala, na mesma data"
+                  className={`${BTN_SECONDARY} grow sm:grow-0`}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Adicionar sala
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleArchiveSchedule(activeSchedule.id, true)}
+                  className={`${BTN_SECONDARY} grow sm:grow-0`}
+                >
+                  <Archive className="h-4 w-4" aria-hidden="true" />
+                  Arquivar escala
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 border-b border-line px-4 py-4">
+              {sameDateSchedules.length > 1 && (
+                <div>
+                  <p className={LABEL}>Eventos nesta data</p>
+                  <div className="flex flex-wrap gap-2">
+                    {sameDateSchedules.map((sd) => {
+                      const isCurr = sd.id === activeSchedule.id;
+                      return (
+                        <button
+                          key={sd.id}
+                          type="button"
+                          aria-pressed={isCurr}
+                          onClick={() => setSelectedScheduleId(sd.id)}
+                          className={`inline-flex min-h-11 max-w-full items-center rounded-lg border px-3 text-sm transition-colors lg:min-h-9 ${
+                            isCurr
+                              ? 'border-accent bg-accent/10 font-medium text-ink'
+                              : 'border-line text-ink-2 hover:bg-ink/5'
+                          }`}
+                        >
+                          <span className="truncate">
+                            {getLocationLabel(sd.locationType, sd.roomName)} · {sd.title}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-400">
-                    Nome / Tema do culto ou programação
-                  </span>
+                  <span className={LABEL}>Nome do evento</span>
                   <input
                     type="text"
                     value={activeSchedule.title}
                     onChange={(e) =>
                       onUpdateScheduleDetails(activeSchedule.id, { title: e.target.value })
                     }
-                    placeholder="Ex.: Noite Manauara, Congresso..."
-                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                    placeholder="Ex.: Culto de jovens"
+                    className={FIELD}
                   />
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-400">Local do evento</span>
+                  <span className={LABEL}>Local</span>
                   <select
                     value={activeSchedule.locationType}
                     onChange={(e) =>
@@ -596,47 +634,51 @@ export function EscalasTab({
                             : undefined,
                       })
                     }
-                    className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none"
+                    className={FIELD}
                   >
-                    <option value="AUDITORIO_PRINCIPAL">Auditório Principal</option>
+                    <option value="AUDITORIO_PRINCIPAL">Auditório principal</option>
                     <option value="SALA">Sala</option>
                   </select>
                 </label>
 
                 {activeSchedule.locationType === 'SALA' && (
                   <label className="block">
-                    <span className="mb-1 block text-xs text-zinc-400">Qual sala?</span>
+                    <span className={LABEL}>Nome da sala</span>
                     <input
                       type="text"
                       value={activeSchedule.roomName || ''}
                       onChange={(e) =>
                         onUpdateScheduleDetails(activeSchedule.id, { roomName: e.target.value })
                       }
-                      placeholder="Ex.: Sala 2, Auditório Anexo"
-                      className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                      placeholder="Ex.: Sala 2"
+                      className={FIELD}
                     />
                   </label>
                 )}
               </div>
 
-              {/* Ajuste fino de quais funções existem neste evento */}
               <div>
-                <p className="mb-1.5 text-xs text-zinc-400">Funções ativas neste evento:</p>
+                <p className={LABEL}>Posições neste evento</p>
                 <div className="flex flex-wrap gap-2">
                   {ALL_POSITIONS.map((pos) => {
                     const active = activeSchedule.assignments.some((a) => a.position === pos);
+                    const Icon = active ? Check : Plus;
                     return (
                       <button
                         key={pos}
                         type="button"
+                        aria-pressed={active}
                         onClick={() => onTogglePositionInSchedule(activeSchedule.id, pos)}
-                        className={`min-h-[38px] rounded-lg border px-3 text-xs font-medium transition ${
+                        className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-sm transition-colors lg:min-h-9 ${
                           active
-                            ? 'border-[#0095FF]/50 bg-[#0095FF]/15 text-white'
-                            : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+                            ? 'border-accent/40 bg-accent/10 font-medium text-ink'
+                            : 'border-dashed border-line-strong text-ink-3 hover:bg-ink/5 hover:text-ink'
                         }`}
                       >
-                        {active ? '✓ ' : '+ '}
+                        <Icon
+                          className={`h-4 w-4 ${active ? 'text-accent' : ''}`}
+                          aria-hidden="true"
+                        />
                         {DESK_POSITION_INFO[pos].label}
                       </button>
                     );
@@ -645,90 +687,118 @@ export function EscalasTab({
               </div>
             </div>
 
-            <div className="mt-4 divide-y divide-white/8">
+            <div
+              aria-hidden="true"
+              className="hidden grid-cols-[minmax(0,1fr)_18rem] gap-x-4 border-b border-line-soft px-4 py-2 text-xs text-ink-3 md:grid"
+            >
+              <span>Posição</span>
+              <span>Pessoa escalada</span>
+            </div>
+
+            <ul className="divide-y divide-line-soft">
               {activeSchedule.assignments.map((asg) => {
                 const pos = DESK_POSITION_INFO[asg.position];
                 return (
-                  <div
+                  <li
                     key={asg.id}
-                    className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="grid gap-2 px-4 py-3 md:grid-cols-[minmax(0,1fr)_18rem] md:items-center md:gap-x-4"
                   >
-                    <div>
-                      <div className="text-sm font-semibold text-white">{pos.label}</div>
-                      <div className="text-xs text-zinc-500">{pos.responsibility}</div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-ink">{pos.label}</span>
+                        <PresenceBadge status={asg.attendanceStatus} />
+                        {asg.attendanceStatus === 'CONFIRMED' && asg.servingOnDesk && (
+                          <OnDeskBadge />
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-ink-4">{pos.responsibility}</p>
                     </div>
 
                     <select
-                      aria-label={`Selecionar membro para ${pos.label}`}
+                      aria-label={`Pessoa escalada em ${pos.label}`}
                       value={asg.userId}
                       onChange={(e) =>
                         onChangeAssignmentMember(activeSchedule.id, asg.id, e.target.value)
                       }
-                      className="min-h-[44px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3 text-base text-white focus:border-[#0095FF] focus:outline-none sm:w-72"
+                      className={FIELD}
                     >
                       {members.map((m) => {
                         const stat = historyStats.find((h) => h.member.id === m.id);
                         const countInPos = stat ? stat.counts[asg.position] : 0;
                         return (
                           <option key={m.id} value={m.id}>
-                            {m.name} ({countInPos}x em {pos.short})
+                            {m.name} ({plural(countInPos, 'vez', 'vezes')} em {pos.short})
                           </option>
                         );
                       })}
                     </select>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </section>
 
-          <section className="rounded-xl border border-white/10 bg-[#12141A] p-5">
-            <h2 className="text-base font-semibold text-white">
-              Controle de rodízio — Quem já serviu em cada posição
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Quantidade de cultos servidos por posição nos sábados registrados.
-            </p>
+          <section className={CARD} aria-labelledby="rodizio-titulo">
+            <div className={CARD_HEADER}>
+              <h2 id="rodizio-titulo" className="section-title">
+                Rodízio por posição
+              </h2>
+              <p className="mt-0.5 text-xs text-ink-3">
+                Quantidade de cultos servidos em cada posição nas escalas registradas.
+              </p>
+            </div>
 
-            <div className="mt-4 hidden overflow-x-auto md:block">
-              <table className="w-full text-left text-sm">
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-xs text-zinc-400">
-                    <th className="py-2.5 pr-4 font-medium">Membro</th>
+                  <tr className="border-b border-line-soft text-xs text-ink-3">
+                    <th scope="col" className="px-4 py-2 text-left font-medium">
+                      Pessoa
+                    </th>
                     {ALL_POSITIONS.map((pos) => (
-                      <th key={pos} className="px-3 py-2.5 text-center font-medium">
+                      <th key={pos} scope="col" className="px-3 py-2 text-center font-medium">
                         {DESK_POSITION_INFO[pos].short}
                       </th>
                     ))}
-                    <th className="px-3 py-2.5 text-center font-medium">Total</th>
-                    <th className="py-2.5 pl-4 text-right font-medium">Última vez</th>
+                    <th scope="col" className="px-3 py-2 text-center font-medium">
+                      Total
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Última escala
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/8">
+                <tbody className="divide-y divide-line-soft">
                   {historyStats.map((row) => (
-                    <tr key={row.member.id}>
-                      <td className="py-3 pr-4 font-medium text-white">{row.member.name}</td>
+                    <tr key={row.member.id} className="hover:bg-ink/5">
+                      <th scope="row" className="px-4 py-2 text-left font-medium text-ink">
+                        {row.member.name}
+                      </th>
                       {ALL_POSITIONS.map((pos) => (
                         <td
                           key={pos}
-                          className={`font-mono-tech px-3 py-3 text-center ${
-                            row.counts[pos] === 0 ? 'text-zinc-600' : 'text-zinc-200'
+                          className={`font-mono-tech px-3 py-2 text-center ${
+                            row.counts[pos] === 0 ? 'text-ink-4' : 'text-ink-2'
                           }`}
                         >
-                          {row.counts[pos]}x
+                          {row.counts[pos]}
                         </td>
                       ))}
-                      <td className="font-mono-tech px-3 py-3 text-center font-semibold text-[#38BDF8]">
+                      <td className="font-mono-tech px-3 py-2 text-center font-semibold text-ink">
                         {row.total}
                       </td>
-                      <td className="py-3 pl-4 text-right text-xs text-zinc-400">
-                        {row.lastServedDate
-                          ? `${formatDateBr(row.lastServedDate)} (${
-                              row.lastServedPos
-                                ? DESK_POSITION_INFO[row.lastServedPos].short
-                                : ''
-                            })`
-                          : 'Ainda não serviu'}
+                      <td className="whitespace-nowrap px-4 py-2 text-right text-xs text-ink-3">
+                        {row.lastServedDate ? (
+                          <>
+                            <span className="font-mono-tech">
+                              {formatDateBr(row.lastServedDate)}
+                            </span>
+                            {row.lastServedPos &&
+                              ` · ${DESK_POSITION_INFO[row.lastServedPos].short}`}
+                          </>
+                        ) : (
+                          'Sem registro'
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -736,113 +806,107 @@ export function EscalasTab({
               </table>
             </div>
 
-            <div className="mt-4 space-y-2.5 md:hidden">
+            <ul className="divide-y divide-line-soft md:hidden">
               {historyStats.map((row) => (
-                <div
-                  key={row.member.id}
-                  className="rounded-lg border border-white/10 bg-[#0B0C0F] p-3.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-white">{row.member.name}</span>
-                    <span className="font-mono-tech text-xs text-[#38BDF8]">
-                      Total: {row.total}
+                <li key={row.member.id} className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-sm font-medium text-ink">
+                      {row.member.name}
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-3">
+                      Total{' '}
+                      <span className="font-mono-tech font-semibold text-ink">{row.total}</span>
                     </span>
                   </div>
-                  <div className="mt-2.5 grid grid-cols-3 gap-1.5 text-center text-xs sm:grid-cols-6">
+                  <dl className="mt-1.5 grid grid-cols-3 gap-x-4 gap-y-0.5 text-xs">
                     {ALL_POSITIONS.map((pos) => (
-                      <div
-                        key={pos}
-                        className="rounded border border-white/8 bg-[#12141A] py-1.5"
-                      >
-                        <div className="text-[10px] text-zinc-500">
-                          {DESK_POSITION_INFO[pos].short.slice(0, 4)}
-                        </div>
-                        <div className="font-mono-tech mt-0.5 font-semibold text-zinc-200">
+                      <div key={pos} className="flex justify-between gap-1">
+                        <dt className="truncate text-ink-3">{DESK_POSITION_INFO[pos].short}</dt>
+                        <dd
+                          className={`font-mono-tech ${
+                            row.counts[pos] === 0 ? 'text-ink-4' : 'text-ink-2'
+                          }`}
+                        >
                           {row.counts[pos]}
-                        </div>
+                        </dd>
                       </div>
                     ))}
-                  </div>
-                  {row.lastServedDate && (
-                    <p className="mt-2 text-xs text-zinc-500">
-                      Última: {formatDateBr(row.lastServedDate)} (
-                      {row.lastServedPos ? DESK_POSITION_INFO[row.lastServedPos].short : ''})
-                    </p>
-                  )}
-                </div>
+                  </dl>
+                  <p className="mt-1.5 text-xs text-ink-4">
+                    Última escala:{' '}
+                    {row.lastServedDate ? (
+                      <>
+                        <span className="font-mono-tech">{formatDateBr(row.lastServedDate)}</span>
+                        {row.lastServedPos &&
+                          ` · ${DESK_POSITION_INFO[row.lastServedPos].short}`}
+                      </>
+                    ) : (
+                      'sem registro'
+                    )}
+                  </p>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         </div>
       )}
 
-      {/* SUB-ABA 3: CULTOS ARQUIVADOS */}
-      {activeSubTab === 'arquivados' && (
-        <div className="space-y-4">
-          {archivedSchedules.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-[#12141A] p-6 text-center text-sm text-zinc-400">
-              Nenhum culto arquivado ainda. Conforme os cultos passam ou são arquivados pela liderança, aparecem aqui.
-            </div>
-          ) : (
-            archivedSchedules.map((sched) => (
-              <section
-                key={sched.id}
-                className="rounded-xl border border-white/10 bg-[#12141A] p-5 space-y-3"
-              >
-                <div className="flex flex-col gap-2 border-b border-white/8 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono-tech text-xs font-semibold text-zinc-400">
-                        {formatDateBr(sched.date)}
-                      </span>
-                      <span className="rounded bg-white/8 px-2 py-0.5 text-[11px] text-zinc-300">
+      {/* ARQUIVADAS */}
+      {activeSubTab === 'arquivados' &&
+        (archivedSchedules.length === 0 ? (
+          <div className={`${CARD} px-4 py-6 text-center text-sm text-ink-3`}>
+            Nenhuma escala arquivada. As escalas de datas passadas e as arquivadas pela liderança
+            aparecem aqui.
+          </div>
+        ) : (
+          <section className={CARD} aria-label="Escalas arquivadas">
+            <ul className="divide-y divide-line">
+              {archivedSchedules.map((sched) => (
+                <li key={sched.id} className="px-4 py-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-ink">{sched.title}</h3>
+                      <p className="mt-0.5 text-xs text-ink-3">
+                        <span className="font-mono-tech">{formatDateBr(sched.date)}</span>
+                        {' · '}
                         {getLocationLabel(sched.locationType, sched.roomName)}
-                      </span>
-                      <span className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-zinc-400">
-                        Arquivado
-                      </span>
+                      </p>
                     </div>
-                    <h2 className="mt-1 text-base font-semibold text-white">{sched.title}</h2>
+
+                    {isLeader && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onToggleArchiveSchedule(sched.id, false);
+                          setSelectedScheduleId(sched.id);
+                          setSubTab('ver');
+                        }}
+                        className={`${BTN_SECONDARY} self-start`}
+                      >
+                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        Reativar escala
+                      </button>
+                    )}
                   </div>
 
-                  {isLeader && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onToggleArchiveSchedule(sched.id, false);
-                        setSelectedScheduleId(sched.id);
-                        setSubTab('ver');
-                      }}
-                      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-white/12 px-3 text-xs font-medium text-zinc-200 hover:bg-white/5"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      <span>Reativar</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                  {sched.assignments.map((asg) => {
-                    const member = members.find((m) => m.id === asg.userId);
-                    const pos = DESK_POSITION_INFO[asg.position];
-                    return (
-                      <div
-                        key={asg.id}
-                        className="rounded-lg border border-white/8 bg-[#0B0C0F] px-3 py-2 text-xs"
-                      >
-                        <div className="font-semibold text-zinc-400">{pos.short}</div>
-                        <div className="mt-0.5 truncate text-sm text-white">
-                          {member?.name ?? '—'}
+                  <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    {sched.assignments.map((asg) => {
+                      const member = members.find((m) => m.id === asg.userId);
+                      return (
+                        <div key={asg.id} className="flex min-w-0 items-baseline gap-2">
+                          <dt className="w-20 shrink-0 text-xs text-ink-3">
+                            {DESK_POSITION_INFO[asg.position].short}
+                          </dt>
+                          <dd className="truncate text-ink-2">{member?.name ?? 'A definir'}</dd>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))
-          )}
-        </div>
-      )}
+                      );
+                    })}
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
     </div>
   );
 }

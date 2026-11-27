@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, Info, Pause, Play } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Pause, Play, Type } from 'lucide-react';
 import type { StageScreen } from '../types/portal';
 import { formatDuration, validateMediaForHolyrics } from '../utils/holyrics';
 
@@ -239,22 +239,63 @@ export function StageSimulator({
       })
     : null;
 
+  const isValid = validation?.status === 'VALID';
+  // Alertas da validação, sem as confirmações positivas; travessão vira ponto e vírgula
+  const warningNotes =
+    validation?.status === 'WARNING'
+      ? validation.messages
+          .filter((msg) => !/validada|compatível|aceito/i.test(msg))
+          .map((msg) => msg.replace(/\s+[—–]\s+/g, '; '))
+      : [];
+
+  const screenFrames = [
+    {
+      key: 'CENTER',
+      name: 'Central',
+      screen: centerScreen,
+      ref: centerCanvasRef,
+      w: 960,
+      h: 540,
+      wrapper: 'col-span-2 @md:order-2 @md:col-span-6',
+      resolutionClass: '',
+    },
+    {
+      key: 'LEFT',
+      name: 'Esquerda',
+      screen: leftScreen,
+      ref: leftCanvasRef,
+      w: 640,
+      h: 360,
+      wrapper: '@md:order-1 @md:col-span-3',
+      resolutionClass: '@md:hidden @2xl:inline',
+    },
+    {
+      key: 'RIGHT',
+      name: 'Direita',
+      screen: rightScreen,
+      ref: rightCanvasRef,
+      w: 640,
+      h: 360,
+      wrapper: '@md:order-3 @md:col-span-3',
+      resolutionClass: '@md:hidden @2xl:inline',
+    },
+  ];
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="section-title">Telões (3 painéis)</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="section-title">Simulação das telas</h2>
 
         <button
           type="button"
+          aria-pressed={showLyricsOverlay}
           onClick={() => setShowLyricsOverlay((v) => !v)}
-          className={`btn-rb-surface inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium ${
-            showLyricsOverlay
-              ? 'border-[#0095FF] bg-[#0095FF]/15 text-white'
-              : 'border-white/12 text-zinc-300'
+          className={`btn-rb-surface inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm font-medium sm:min-h-9 ${
+            showLyricsOverlay ? 'border-accent bg-accent/10 text-accent' : 'border-line text-ink-2'
           }`}
         >
-          <Eye className="h-3.5 w-3.5" />
-          <span>Testar letra</span>
+          <Type className="h-4 w-4" />
+          <span>Sobrepor letra</span>
         </button>
       </div>
 
@@ -262,74 +303,48 @@ export function StageSimulator({
         <video ref={videoRef} src={media.url} className="hidden" playsInline muted />
       )}
 
-      {/* Palco com os 3 telões + formatos aceitos integrados discretamente na base */}
-      <div className="rounded-xl border border-white/10 bg-[#08090C] p-3">
-        <div className="grid grid-cols-12 items-end gap-2">
-          <div className="col-span-3 space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-zinc-400">
-              <span className="truncate">Esquerda</span>
-              <span className="font-mono-tech hidden sm:inline">
-                {leftScreen.widthPx}×{leftScreen.heightPx}
-              </span>
+      {/* Moldura segue o tema; as telas ficam pretas porque representam a projeção real */}
+      <div className="@container rounded-lg border border-line bg-sunken p-2.5 sm:p-3">
+        <div className="grid grid-cols-2 items-end gap-2 @md:grid-cols-12">
+          {screenFrames.map((f) => (
+            <div key={f.key} className={`min-w-0 space-y-1 ${f.wrapper}`}>
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span
+                  className={`truncate ${f.key === 'CENTER' ? 'font-medium text-ink' : 'text-ink-3'}`}
+                >
+                  {f.name}
+                </span>
+                <span className={`font-mono-tech shrink-0 text-[11px] text-ink-4 ${f.resolutionClass}`}>
+                  {f.screen.widthPx}×{f.screen.heightPx}
+                </span>
+              </div>
+              <div className="aspect-video overflow-hidden rounded border border-line-strong bg-black">
+                <canvas
+                  ref={f.ref}
+                  width={f.w}
+                  height={f.h}
+                  role="img"
+                  aria-label={`Prévia da tela ${f.name.toLowerCase()} (${f.screen.widthPx}×${f.screen.heightPx})`}
+                  className="h-full w-full object-contain"
+                />
+              </div>
             </div>
-            <div className="overflow-hidden rounded border border-white/12 bg-black aspect-video">
-              <canvas
-                ref={leftCanvasRef}
-                width={640}
-                height={360}
-                className="h-full w-full object-contain"
-              />
-            </div>
-          </div>
-
-          <div className="col-span-6 space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-zinc-300">
-              <span className="truncate font-semibold text-white">Central</span>
-              <span className="font-mono-tech">
-                {centerScreen.widthPx}×{centerScreen.heightPx}
-              </span>
-            </div>
-            <div className="overflow-hidden rounded-md border border-[#0095FF]/40 bg-black aspect-video">
-              <canvas
-                ref={centerCanvasRef}
-                width={960}
-                height={540}
-                className="h-full w-full object-contain"
-              />
-            </div>
-          </div>
-
-          <div className="col-span-3 space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-zinc-400">
-              <span className="truncate">Direita</span>
-              <span className="font-mono-tech hidden sm:inline">
-                {rightScreen.widthPx}×{rightScreen.heightPx}
-              </span>
-            </div>
-            <div className="overflow-hidden rounded border border-white/12 bg-black aspect-video">
-              <canvas
-                ref={rightCanvasRef}
-                width={640}
-                height={360}
-                className="h-full w-full object-contain"
-              />
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Barra de reprodução quando um vídeo está no telão */}
+        {/* Controles de reprodução quando há vídeo nas telas */}
         {media?.kind === 'video' && (
-          <div className="mt-2.5 flex items-center gap-2.5 border-t border-white/8 pt-2.5">
+          <div className="mt-2.5 flex items-center gap-2.5 border-t border-line pt-2.5">
             <button
               type="button"
               onClick={() => togglePlay(!isPlaying)}
-              aria-label={isPlaying ? 'Pausar' : 'Reproduzir'}
-              className="btn-rb-primary inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white"
+              aria-label={isPlaying ? 'Pausar vídeo' : 'Reproduzir vídeo'}
+              className="btn-rb-primary inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-white sm:h-9 sm:w-9"
             >
-              {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
 
-            <span className="font-mono-tech w-10 text-[11px] text-zinc-300">
+            <span className="font-mono-tech w-11 text-xs text-ink-2">
               {formatDuration(currentTime)}
             </span>
             <input
@@ -338,46 +353,39 @@ export function StageSimulator({
               max={duration || 1}
               step={0.1}
               value={currentTime}
+              aria-label="Posição do vídeo"
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="h-1.5 flex-1 cursor-pointer accent-[#0095FF]"
+              className="h-1.5 min-w-0 flex-1 cursor-pointer accent-accent"
             />
-            <span className="font-mono-tech w-10 text-right text-[11px] text-zinc-500">
+            <span className="font-mono-tech w-11 text-right text-xs text-ink-3">
               {formatDuration(duration)}
             </span>
           </div>
         )}
 
-        {/* Tipos aceitos discretos dentro da base do Telão */}
-        <div className="mt-2.5 border-t border-white/8 pt-2 text-[11px] text-zinc-400">
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5">
-                <strong className="text-zinc-200">Vídeo 16:9</strong> .mp4/.mov
-              </span>
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5">
-                <strong className="text-zinc-200">Imagem 16:9</strong> .png/.jpg
-              </span>
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5">
-                <strong className="text-zinc-200">BG</strong> .mp3/.wav
-              </span>
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5">
-                <strong className="text-zinc-200">Slides</strong> .pdf
-              </span>
-            </div>
+        {/* Formatos aceitos */}
+        <div className="mt-2.5 border-t border-line pt-2 text-xs text-ink-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p>
+              Aceitos: vídeo 16:9 (.mp4, .mov), imagem 16:9 (.png, .jpg), áudio de fundo (.mp3,
+              .wav) e slides (.pdf).
+            </p>
 
             <button
               type="button"
+              aria-expanded={showFormatNote}
               onClick={() => setShowFormatNote((v) => !v)}
-              className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+              className="inline-flex min-h-11 items-center gap-1.5 text-ink-2 hover:text-ink sm:min-h-0"
             >
-              <Info className="h-3 w-3 text-[#F5C41E]" />
-              <span>{showFormatNote ? 'Fechar' : 'Regras'}</span>
+              <Info className="h-4 w-4" />
+              <span>{showFormatNote ? 'Ocultar especificações' : 'Especificações'}</span>
             </button>
           </div>
 
           {showFormatNote && (
-            <p className="mt-1.5 rounded bg-[#12141A] px-2.5 py-1.5 text-[11px] text-zinc-400">
-              Central 3840×2160 · Laterais 3200×1800 (ou 1920×1080) em 16:9. Arquivos verticais (9:16) e PPT/PPTX são bloqueados automaticamente.
+            <p className="mt-1.5 text-ink-2">
+              Tela central 3840×2160; laterais 3200×1800 ou 1920×1080, sempre em 16:9. Arquivos
+              verticais (9:16) e PPT/PPTX são recusados automaticamente.
             </p>
           )}
         </div>
@@ -385,20 +393,29 @@ export function StageSimulator({
 
       {media && validation && validation.status !== 'REJECTED' && (
         <div
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
-            validation.status === 'VALID'
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-              : 'border-[#F5C41E]/35 bg-[#F5C41E]/10 text-[#FDE68A]'
+          role="status"
+          className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+            isValid ? 'border-ok/30 bg-ok/10' : 'border-attn/40 bg-attn/10'
           }`}
         >
-          {validation.status === 'VALID' ? (
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          {isValid ? (
+            <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-ok" />
           ) : (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[#F5C41E]" />
+            <AlertTriangle className="mt-px h-4 w-4 shrink-0 text-attn" />
           )}
-          <span className="truncate font-medium text-white">
-            {media.filename} ({media.width}×{media.height})
-          </span>
+          <div className="min-w-0">
+            <p className={`font-medium ${isValid ? 'text-ok' : 'text-attn'}`}>
+              {isValid ? 'Compatível com as telas' : 'Compatível, com alerta'}
+            </p>
+            <p className="truncate font-mono-tech text-ink-2" title={media.filename}>
+              {media.filename} · {media.width}×{media.height}
+            </p>
+            {warningNotes.map((note) => (
+              <p key={note} className="text-ink-2">
+                {note}
+              </p>
+            ))}
+          </div>
         </div>
       )}
     </div>

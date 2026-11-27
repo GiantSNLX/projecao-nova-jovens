@@ -1,27 +1,122 @@
 @import "tailwindcss";
 
+/*
+ * Tokens de tema. Os componentes usam só nomes semânticos (bg-surface, text-ink,
+ * border-line, text-accent...). Os valores mudam entre claro e escuro aqui.
+ * - accent: texto, borda e realce do acento; accent-solid: fundo de botão com texto branco.
+ * - ok / attn / danger: estados, sempre acompanhados de texto.
+ */
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-sunken: var(--c-sunken);
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-ink-4: var(--c-ink-4);
+  --color-line: var(--c-line);
+  --color-line-soft: var(--c-line-soft);
+  --color-line-strong: var(--c-line-strong);
+  --color-accent: var(--c-accent);
+  --color-accent-solid: var(--c-accent-solid);
+  --color-accent-strong: var(--c-accent-strong);
+  --color-ok: var(--c-ok);
+  --color-ok-solid: var(--c-ok-solid);
+  --color-attn: var(--c-attn);
+  --color-attn-solid: var(--c-attn-solid);
+  --color-danger: var(--c-danger);
+}
+
 @layer base {
   :root {
     --font-sans: 'Host Grotesk', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* Claro */
+    color-scheme: light;
+    --c-canvas: #f4f4f1;
+    --c-surface: #ffffff;
+    --c-sunken: #ebebe7;
+    --c-ink: #17181b;
+    --c-ink-2: #3b3e45;
+    --c-ink-3: #5b5f68;
+    --c-ink-4: #7d818a;
+    --c-line: rgb(23 24 27 / 0.11);
+    --c-line-soft: rgb(23 24 27 / 0.07);
+    --c-line-strong: rgb(23 24 27 / 0.2);
+    --c-accent: #1f5fbf;
+    --c-accent-solid: #1f5fbf;
+    --c-accent-strong: #194f9f;
+    --c-ok: #1b7348;
+    --c-ok-solid: #1c7c4c;
+    --c-attn: #94600a;
+    --c-attn-solid: #e3ad3c;
+    --c-danger: #b3382c;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+      --c-canvas: #0f1012;
+      --c-surface: #17181b;
+      --c-sunken: #0b0c0e;
+      --c-ink: #edeef0;
+      --c-ink-2: #c5c8ce;
+      --c-ink-3: #9b9fa7;
+      --c-ink-4: #6f737b;
+      --c-line: rgb(255 255 255 / 0.1);
+      --c-line-soft: rgb(255 255 255 / 0.06);
+      --c-line-strong: rgb(255 255 255 / 0.18);
+      --c-accent: #6aa5f8;
+      --c-accent-solid: #2f6fd0;
+      --c-accent-strong: #2860b8;
+      --c-ok: #55c48f;
+      --c-ok-solid: #1c7c4c;
+      --c-attn: #e2b04a;
+      --c-attn-solid: #e2b04a;
+      --c-danger: #f07167;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --c-canvas: #0f1012;
+    --c-surface: #17181b;
+    --c-sunken: #0b0c0e;
+    --c-ink: #edeef0;
+    --c-ink-2: #c5c8ce;
+    --c-ink-3: #9b9fa7;
+    --c-ink-4: #6f737b;
+    --c-line: rgb(255 255 255 / 0.1);
+    --c-line-soft: rgb(255 255 255 / 0.06);
+    --c-line-strong: rgb(255 255 255 / 0.18);
+    --c-accent: #6aa5f8;
+    --c-accent-solid: #2f6fd0;
+    --c-accent-strong: #2860b8;
+    --c-ok: #55c48f;
+    --c-ok-solid: #1c7c4c;
+    --c-attn: #e2b04a;
+    --c-attn-solid: #e2b04a;
+    --c-danger: #f07167;
   }
 
   html {
     font-family: var(--font-sans);
-    background-color: #0B0C0F;
-    color: #F4F5F7;
+    background-color: var(--c-canvas);
+    color: var(--c-ink);
     overflow-x: clip;
   }
 
   body {
     overflow-x: clip;
+    background-color: var(--c-canvas);
     font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /* Evita zoom automatico no celular ao tocar em campos */
+  /* Evita zoom automático no celular ao tocar em campos */
   input,
   select,
   textarea {
@@ -40,40 +135,34 @@
 
   /* Hierarquia tipográfica consistente */
   .page-title {
-    font-size: clamp(1.5rem, 2.2vw, 1.75rem);
+    font-size: clamp(1.375rem, 2vw, 1.625rem);
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
-    color: #ffffff;
+    color: var(--c-ink);
   }
 
   .section-title {
-    font-size: 1.0625rem;
+    font-size: 1rem;
     font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.35;
-    color: #ffffff;
+    color: var(--c-ink);
   }
 
-  /* Botões táteis (estilo React Bits Specular / Tactile) */
+  /* Botão principal: chapado, sem gradiente nem brilho */
   .btn-rb-primary {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, #0ea5ff 0%, #0088ee 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      0 1px 2px rgba(0, 0, 0, 0.35);
+    background-color: var(--c-accent-solid);
+    color: #ffffff;
     transition:
       transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
-      filter 140ms ease,
-      box-shadow 140ms ease;
+      background-color 140ms ease;
   }
 
   .btn-rb-primary:hover:not(:disabled) {
-    filter: brightness(1.06);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.34),
-      0 6px 16px -6px rgba(0, 149, 255, 0.55);
+    background-color: var(--c-accent-strong);
   }
 
   .btn-rb-primary:active:not(:disabled) {
@@ -81,7 +170,6 @@
   }
 
   .btn-rb-surface {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     transition:
       transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
       background-color 140ms ease,
@@ -89,12 +177,17 @@
   }
 
   .btn-rb-surface:hover:not(:disabled) {
-    border-color: rgba(255, 255, 255, 0.24);
-    background-color: rgba(255, 255, 255, 0.05);
+    border-color: var(--c-line-strong);
+    background-color: color-mix(in oklab, var(--c-ink) 5%, transparent);
   }
 
   .btn-rb-surface:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
   }
 }
 
@@ -108,7 +201,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in oklab, var(--c-ink) 18%, transparent);
   border-radius: 9999px;
 }
 

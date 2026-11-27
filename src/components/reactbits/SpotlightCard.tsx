@@ -13,7 +13,7 @@ interface SpotlightCardProps {
 export function SpotlightCard({
   children,
   className = '',
-  spotlightColor = 'rgba(0, 149, 255, 0.14)',
+  spotlightColor = 'color-mix(in oklab, var(--c-ink) 5%, transparent)',
 }: SpotlightCardProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });

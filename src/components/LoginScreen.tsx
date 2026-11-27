@@ -42,27 +42,27 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-[#0B0C0F] px-4 py-10 text-[#F4F5F7]">
+    <div className="flex min-h-screen flex-col justify-center bg-canvas px-4 py-10 text-ink">
       <div className="mx-auto w-full max-w-[400px]">
         <div className="mb-8 flex items-center gap-3.5">
           <ProjectorMark size={44} className="shrink-0" />
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-white">
+            <h1 className="text-xl font-semibold tracking-tight text-ink">
               Projeção Nova Jovens
             </h1>
-            <p className="text-sm text-zinc-400">Acesso da equipe e ministérios</p>
+            <p className="text-sm text-ink-3">Acesso da equipe e ministérios</p>
           </div>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-white/10 bg-[#12141A] p-6"
+          className="rounded-xl border border-line bg-surface p-6"
         >
           <div className="space-y-4">
             <div>
               <label
                 htmlFor="login-senib"
-                className="block text-sm font-medium text-zinc-300"
+                className="block text-sm font-medium text-ink-2"
               >
                 Matrícula SENIB
               </label>
@@ -74,14 +74,14 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
                 value={senibId}
                 onChange={(e) => setSenibId(e.target.value.replace(/\s+/g, ''))}
                 placeholder="Ex.: 1042"
-                className="font-mono-tech mt-1.5 min-h-[48px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3.5 text-base text-white placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                className="font-mono-tech mt-1.5 min-h-[48px] w-full rounded-lg border border-line bg-sunken px-3.5 text-base text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none"
               />
             </div>
 
             <div>
               <label
                 htmlFor="login-pin"
-                className="block text-sm font-medium text-zinc-300"
+                className="block text-sm font-medium text-ink-2"
               >
                 PIN (4 dígitos)
               </label>
@@ -94,13 +94,13 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="••••"
-                className="font-mono-tech mt-1.5 min-h-[48px] w-full rounded-lg border border-white/12 bg-[#0B0C0F] px-3.5 text-base tracking-[0.35em] text-white placeholder:tracking-normal placeholder:text-zinc-600 focus:border-[#0095FF] focus:outline-none"
+                className="font-mono-tech mt-1.5 min-h-[48px] w-full rounded-lg border border-line bg-sunken px-3.5 text-base tracking-[0.35em] text-ink placeholder:tracking-normal placeholder:text-ink-4 focus:border-accent focus:outline-none"
               />
             </div>
           </div>
 
           {error && (
-            <p role="alert" className="mt-3 text-sm text-red-400">
+            <p role="alert" className="mt-3 text-sm text-danger">
               {error}
             </p>
           )}
@@ -119,14 +119,14 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
           <button
             type="button"
             onClick={() => setShowDemoList((v) => !v)}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 text-sm text-ink-3 transition-colors hover:text-ink-2"
           >
             <KeyRound className="h-4 w-4" />
             <span>{showDemoList ? 'Ocultar matrículas de teste' : 'Ver matrículas de teste'}</span>
           </button>
 
           {showDemoList && (
-            <div className="mt-2 divide-y divide-white/8 rounded-xl border border-white/10 bg-[#12141A]">
+            <div className="mt-2 divide-y divide-line-soft rounded-xl border border-line bg-surface">
               {members.map((m) => (
                 <button
                   key={m.id}
@@ -136,13 +136,13 @@ export function LoginScreen({ members, onLoginSuccess }: LoginScreenProps) {
                     setPin(m.pin);
                     setError(null);
                   }}
-                  className="flex min-h-[44px] w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors hover:bg-white/5"
+                  className="flex min-h-[44px] w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors hover:bg-ink/5"
                 >
                   <div>
-                    <span className="font-medium text-zinc-100">{m.name}</span>
-                    <span className="ml-2 text-xs text-zinc-400">{m.ministry}</span>
+                    <span className="font-medium text-ink">{m.name}</span>
+                    <span className="ml-2 text-xs text-ink-3">{m.ministry}</span>
                   </div>
-                  <span className="font-mono-tech text-xs text-[#38BDF8]">
+                  <span className="font-mono-tech text-xs text-accent">
                     {m.senibId} · {m.pin}
                   </span>
                 </button>

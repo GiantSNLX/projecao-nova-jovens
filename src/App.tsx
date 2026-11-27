@@ -787,8 +787,8 @@ export function App() {
   };
 
   return (
-    <ClickSpark sparkColor="#38BDF8" sparkRadius={18} sparkSize={8}>
-      <div className="min-h-screen bg-[#0B0C0F] text-[#F4F5F7]">
+    <ClickSpark sparkColor="#8a8f98" sparkRadius={14} sparkSize={6}>
+      <div className="min-h-screen bg-canvas text-ink">
         <Header
           activeTab={activeTab}
           onTabChange={setActiveTab}

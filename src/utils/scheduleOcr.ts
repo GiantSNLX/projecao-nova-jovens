@@ -119,7 +119,7 @@ export function parseScheduleText(
       durationMinutes,
       title: rest,
       description: songMatch
-        ? `Música ${songMatch[1].toUpperCase()} — letra no Holyrics.`
+        ? `Música ${songMatch[1].toUpperCase()} : letra no Holyrics.`
         : itemType === 'CLOSING'
           ? 'Encerramento do culto.'
           : `${teamLabel} · ${plannedTime}`,

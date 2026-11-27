@@ -37,7 +37,7 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDuration(seconds?: number): string {
-  if (!seconds || !Number.isFinite(seconds)) return '—';
+  if (!seconds || !Number.isFinite(seconds)) return '-';
   const total = Math.round(seconds);
   const mins = Math.floor(total / 60);
   const secs = total % 60;
@@ -177,7 +177,7 @@ export function validateMediaForHolyrics(params: {
     if (params.widthPx < 1280) {
       status = 'WARNING';
       messages.push(
-        `Resolução baixa (${params.widthPx}×${params.heightPx}) — recomendado mínimo 1280×720 para os telões.`,
+        `Resolução baixa (${params.widthPx}×${params.heightPx}). O mínimo recomendado para os telões é 1280×720.`,
       );
     }
   } else if (category === 'AUDIO') {
@@ -189,7 +189,7 @@ export function validateMediaForHolyrics(params: {
   const sizeMb = params.fileSizeBytes / (1024 * 1024);
   if (category === 'VIDEO' && sizeMb > 450) {
     status = 'WARNING';
-    messages.push(`Vídeo pesado (${sizeMb.toFixed(0)} MB) — testar fluidez na mesa.`);
+    messages.push(`Vídeo pesado (${sizeMb.toFixed(0)} MB). Teste a fluidez na mesa.`);
   }
 
   return { category, status, aspectRatio, messages };
@@ -256,7 +256,7 @@ export function describeMediaTrigger(asset: MediaAsset, state: ServiceState): st
   }
   if (asset.displayTrigger === 'RUN_ITEM') {
     const item = state.runItems.find((r) => r.id === asset.runItemId);
-    return item ? `${item.plannedTime} – ${item.title}` : 'No momento do roteiro';
+    return item ? `${item.plannedTime} · ${item.title}` : 'No momento do roteiro';
   }
   return TRIGGER_LABELS[asset.displayTrigger];
 }
@@ -327,7 +327,7 @@ export async function generateAndDownloadHolyricsZip(
   const sortedSongs = state.songs.slice().sort((a, b) => a.orderIndex - b.orderIndex);
 
   const roteiroTxt = [
-    `PROJEÇÃO NOVA JOVENS 2 — ROTEIRO PARA HOLYRICS`,
+    `PROJEÇÃO NOVA JOVENS 2 · ROTEIRO PARA HOLYRICS`,
     `Culto: ${state.title} | Data: ${state.serviceDate} (${state.startsAtTime})`,
     `Programação: ${teamInfo.name}`,
     `Telões: Central 3840x2160 (16:9) | Laterais 3200x1800 (16:9)`,
@@ -410,7 +410,7 @@ export async function generateAndDownloadHolyricsZip(
         onDemandFolder?.file(asset.normalizedFilename, realFile);
       }
       notesSummary.push(
-        `Arquivo: ${asset.normalizedFilename}\nQuando exibir: ${describeMediaTrigger(asset, state)}\nTelas: ${asset.targetScreen}\nNota: ${asset.note || '—'}\n`,
+        `Arquivo: ${asset.normalizedFilename}\nQuando exibir: ${describeMediaTrigger(asset, state)}\nTelas: ${asset.targetScreen}\nNota: ${asset.note || 'sem nota'}\n`,
       );
       mediaCount += 1;
     }
@@ -437,7 +437,7 @@ export async function generateAndDownloadHolyricsZip(
 
 export function getMediaAssetResolutionSummary(asset: MediaAsset): string {
   if (asset.widthPx && asset.heightPx) {
-    return `${asset.widthPx}×${asset.heightPx} (${asset.aspectRatio ?? '—'})`;
+    return `${asset.widthPx}×${asset.heightPx}${asset.aspectRatio ? ` (${asset.aspectRatio})` : ''}`;
   }
   if (asset.durationSeconds) {
     return `Duração ${formatDuration(asset.durationSeconds)}`;
